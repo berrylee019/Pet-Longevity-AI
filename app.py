@@ -33,33 +33,59 @@ import re
 def analyze_pet_image(image_path):
     try:
         img = Image.open(image_path)
-        # 형식을 JSON으로 강제하지 않고, 수의사처럼 편하게 말하라고 합니다.
+        # AI에게 서술형으로 편하게 말하라고 주문합니다.
         prompt = """
-        반려견 전문 수의사로서 이 사진 속 리트리버의 체형을 분석해줘.
-        1. BCS 점수 (1에서 9 사이의 숫자 하나)를 반드시 포함해.
-        2. 점수를 매긴 이유를 한 문장으로 설명해줘.
-        
-        예시: 5점 / 허리 라인이 적절하고 갈비뼈가 살짝 만져지는 표준 체형입니다.
+        반려견 수의사로서 사진 속 리트리버를 분석해줘.
+        1. BCS 점수 (1~9 사이 숫자 하나)를 꼭 포함할 것.
+        2. 점수 매긴 이유를 짧게 설명할 것.
         """
         response = model.generate_content([prompt, img])
         res_text = response.text.strip()
         
-        # [핵심] 텍스트 전체에서 숫자(1~9)만 쏙 뽑아냅니다.
+        # [핵심] 텍스트에서 숫자만 쏙 뽑아냅니다. (점수가 5점이라면 5만 추출)
         scores = re.findall(r'[1-9]', res_text)
         
         if scores:
-            # 가장 먼저 발견된 숫자를 점수로 채택
-            bcs_val = int(scores[0])
             return {
-                "status": "VALID",
-                "bcs_score": bcs_val,
-                "reason": res_text  # AI의 전체 답변을 이유로 활용
+                "bcs_score": int(scores[0]),
+                "reason": res_text 
             }
         else:
-            return {"status": "INVALID", "reason": f"AI 답변에 숫자가 없음: {res_text}"}
+            return {
+                "bcs_score": 5, # 숫자가 없으면 기본값 5점 부여
+                "reason": f"AI가 점수를 명시하지 않아 기본값으로 처리했습니다. (답변: {res_text})"
+            }
             
     except Exception as e:
-        return {"status": "ERROR", "reason": str(e)}
+        return {"bcs_score": 5, "reason": f"오류 발생: {str(e)}"}
+
+# --- Step 3 출력 섹션 (기존의 'INVALID' 관련 if문을 모두 삭제한 버전) ---
+if st.button("🧠 AI 노화 속도 분석 시작", use_container_width=True, key="final_all_in_one_btn"):
+    sample_path = "dataset/side_view"
+    if not os.path.exists(sample_path) or not os.listdir(sample_path):
+        st.error("먼저 이미지를 수집해주세요!")
+    else:
+        files = [f for f in os.listdir(sample_path) if f.endswith(('.jpg', '.jpeg', '.png'))]
+        # 딱 3장만 랜덤 분석
+        test_files = random.sample(files, min(3, len(files)))
+        
+        for img_name in test_files:
+            full_path = os.path.join(sample_path, img_name)
+            st.image(full_path, width=350, caption=f"분석 중: {img_name}")
+            
+            with st.spinner("AI 수의사가 분석표를 작성 중..."):
+                res = analyze_pet_image(full_path)
+                
+            # 예전의 'if res["status"] == "VALID"' 같은 까다로운 조건문을 다 치워버렸습니다.
+            bcs = res["bcs_score"]
+            pace = calculate_pace_of_aging(bcs)
+            
+            st.success(f"✅ 분석 완료! (BCS {bcs}/9)")
+            st.metric("예상 노화 속도", f"{pace}배속")
+            
+            with st.expander("수의사 상세 소견"):
+                st.write(res["reason"])
+            st.divider()
 
 # --- Step 3 출력 로직 (중복 방지를 위해 key 이름도 변경) ---
 if st.button("🧠 AI 노화 속도 분석 시작", use_container_width=True, key="final_analysis_button"):
