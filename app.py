@@ -67,7 +67,7 @@ def analyze_pet_image(image_path):
         return {"status": "ERROR", "reason": str(e)}
 
 # --- Step 3 UI 수정 ---
-if st.button("🧠 AI 노화 속도 분석 시작", use_container_width=True, key="analysis_main_btn"):
+if st.button("🧠 AI 노화 속도 분석 시작", use_container_width=True, key="analysis_step3_final"):
     # ... (기존 폴더 체크 로직 동일) ...
     for img_name in test_files:
         full_path = os.path.join(sample_path, img_name)
