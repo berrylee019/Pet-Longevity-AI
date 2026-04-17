@@ -43,23 +43,37 @@ def analyze_pet_image(image_path):
         return {"status": "ERROR", "reason": str(e)}
 
 # 3. UI에서 분석 실행 (예시)
+# --- 수정된 분석 섹션 로직 ---
+st.header("Step 2. 노화 속도 로직 테스트")
+
 if st.button("수집된 데이터 AI 채점 시작"):
     sample_path = "dataset/side_view"
-    files = [f for f in os.listdir(sample_path) if f.endswith(('.jpg', '.jpeg', '.png'))][:5] # 5장만 먼저 테스트
     
-    for img_name in files:
-        full_path = os.path.join(sample_path, img_name)
-        st.image(full_path, use_column_width=True)
+    # 1. 폴더 존재 여부 확인 (안전 장치)
+    if not os.path.exists(sample_path):
+        st.error(f"📂 '{sample_path}' 폴더가 없습니다. 사이드바에서 먼저 [이미지 수집 시작] 버튼을 눌러주세요!")
+    else:
+        # 2. 이미지 파일 리스트 가져오기
+        files = [f for f in os.listdir(sample_path) if f.endswith(('.jpg', '.jpeg', '.png'))]
         
-        with st.spinner('Gemini 수의사가 분석 중...'):
-            analysis = analyze_pet_image(full_path)
-            
-        if analysis["status"] == "VALID":
-            bcs = analysis["bcs_score"]
-            pace = calculate_pace_of_aging(bcs) # 아까 만든 함수 활용
-            st.success(f"✅ 판독 완료: BCS **{bcs}**/9 (사유: {analysis['reason']})")
-            st.metric(label="현재 노화 속도", value=f"{pace}x")
-        elif analysis["status"] == "INVALID":
-            st.warning("⚠️ 전신 사진이 아니라 판독이 불가능합니다 (노이즈 데이터).")
+        if not files:
+            st.warning("폴더는 있지만 저장된 이미지 파일이 없습니다. 수집을 다시 진행해 주세요.")
         else:
-            st.error(f"❌ 분석 오류: {analysis['reason']}")
+            # 5장만 테스트
+            target_files = files[:5] 
+            
+            for img_name in target_files:
+                full_path = os.path.join(sample_path, img_name)
+                st.image(full_path, caption=f"분석 대상: {img_name}", width=400)
+                
+                with st.spinner(f'{img_name} 분석 중...'):
+                    analysis = analyze_pet_image(full_path)
+                    
+                if analysis["status"] == "VALID":
+                    bcs = analysis["bcs_score"]
+                    pace = calculate_pace_of_aging(bcs)
+                    st.success(f"✅ BCS: {bcs}/9 | 노화 속도: {pace}x")
+                    st.info(f"📝 근거: {analysis['reason']}")
+                else:
+                    st.warning(f"⚠️ 건너뜀: {analysis.get('reason', '판독 불가')}")
+                st.divider()
