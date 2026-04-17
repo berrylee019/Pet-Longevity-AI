@@ -31,26 +31,58 @@ def calculate_pace_of_aging(bcs_score, is_large_breed=True):
 def analyze_pet_image(image_path):
     try:
         img = Image.open(image_path)
-        # 프롬프트를 조금 더 구체적이고 너그럽게 수정했습니다.
+        # AI에게 서술형으로 답변해도 좋으니 점수만 확실히 달라고 요청
         prompt = """
-        너는 베테랑 수의사야. 사진 속 리트리버의 체형을 분석해서 BCS(1~9) 점수를 매겨줘.
+        너는 베테랑 수의사야. 사진 속 리트리버의 체형을 분석해줘.
         
-        1. 사진에 강아지의 몸통(허리나 갈비뼈 부근)이 조금이라도 보인다면 최대한 판독해줘.
-        2. 점수는 1(매우 마름), 5(표준), 9(비만) 사이로 매겨줘.
+        1. BCS(1~9) 점수를 판독해줘. (5가 표준)
+        2. 만약 전신이 아니라면 최대한 추측해서라도 점수를 주고 그 이유를 써줘.
         
-        결과는 반드시 아래 JSON 형식으로만 딱 한 줄로 출력해:
-        {"status": "VALID", "bcs_score": 5, "reason": "허리 라인이 적절하게 유지됨"}
+        결과는 반드시 JSON 형식으로 출력해:
+        {"status": "VALID", "bcs_score": 5, "reason": "이유 설명"}
         """
         response = model.generate_content([prompt, img])
+        res_text = response.text.strip()
         
-        # AI가 한 말을 디버깅용으로 텍스트로 정리
-        raw_text = response.text.strip().replace('```json', '').replace('```', '')
+        # [중요] AI의 실제 답변을 로그로 찍어서 확인 (에러 추적용)
+        print(f"AI Raw Response: {res_text}") 
         
-        # 혹시 JSON 형식이 아니더라도 점수만 있으면 뽑아내는 안전장치
-        return json.loads(raw_text)
+        # JSON 부분만 추출하는 마법 (문자열 전처리)
+        start_idx = res_text.find('{')
+        end_idx = res_text.rfind('}') + 1
+        if start_idx != -1 and end_idx != 0:
+            json_str = res_text[start_idx:end_idx]
+            return json.loads(json_str)
+        else:
+            # JSON이 없으면 텍스트에서 숫자라도 찾기
+            import re
+            scores = re.findall(r'\d+', res_text)
+            if scores:
+                return {"status": "VALID", "bcs_score": int(scores[0]), "reason": "텍스트 분석 결과"}
+                
+        return {"status": "INVALID", "reason": "AI 답변 형식 오류"}
     except Exception as e:
-        # 에러가 나면 화면에 실제 AI의 답변을 찍어보게 합니다.
-        return {"status": "ERROR", "reason": f"AI 답변 해석 실패: {str(e)}"}
+        return {"status": "ERROR", "reason": str(e)}
+
+# --- Step 3 UI 부분도 살짝 수정 (AI의 실제 말을 보기 위함) ---
+if st.button("🧠 AI 노화 속도 분석 시작", use_container_width=True):
+    # ... (기존 폴더 체크 로직) ...
+    for img_name in test_files:
+        # ... (이미지 출력 로직) ...
+        with st.spinner("AI 분석 중..."):
+            res = analyze_pet_image(full_path)
+            
+        if res.get("status") == "VALID":
+            bcs = res["bcs_score"]
+            pace = calculate_pace_of_aging(bcs)
+            st.success(f"✅ 결과: BCS {bcs}/9")
+            st.info(f"💡 수의사 소견: {res['reason']}")
+            st.metric("예상 노화 속도", f"{pace}x")
+        else:
+            # 실패 시 AI가 뭐라고 했는지 직접 노출 (형님 확인용)
+            st.warning(f"⚠️ 판독 보류: {res.get('reason')}")
+            with st.expander("AI의 실제 답변 보기"):
+                st.write(res)
 
 # --- 3. 메인 화면 UI ---
 st.title("🐾 리트리버 노화 속도 분석 시스템")
