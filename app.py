@@ -1,5 +1,9 @@
+import streamlit as st
 import google.generativeai as genai
+import os
+import json
 from PIL import Image
+from icrawler.builtin import BingImageCrawler
 
 # 1. Gemini 설정 (Secrets에서 키 가져오기)
 try:
