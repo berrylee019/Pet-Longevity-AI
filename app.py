@@ -5,7 +5,7 @@ from PIL import Image
 try:
     GOOGLE_API_KEY = st.secrets["GEMINI_API_KEY"]
     genai.configure(api_key=GOOGLE_API_KEY)
-    model = genai.GenerativeModel('gemini-1.5-pro') # 최신 멀티모달 모델
+    model = genai.GenerativeModel('gemini-2.5-pro') # 최신 멀티모달 모델
 except:
     st.error("Secrets에 GEMINI_API_KEY를 설정해주세요.")
 
