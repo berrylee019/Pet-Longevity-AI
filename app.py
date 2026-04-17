@@ -35,7 +35,7 @@ def analyze_pet_image(image_path):
         import json
         result = json.loads(response.text.replace('```json', '').replace('```', ''))
         return result
-    exceptException as e:
+    except Exception as e:
         return {"status": "ERROR", "reason": str(e)}
 
 # 3. UI에서 분석 실행 (예시)
