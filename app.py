@@ -88,3 +88,21 @@ for p in paths:
         st.write(f"📂 {p}: 현재 **{len(files)}**장의 사진이 모였습니다.")
     else:
         st.write(f"📂 {p}: 아직 폴더가 생성되지 않았습니다.")
+
+# 수집 완료 메시지 아래에 추가
+if st.button("수집된 이미지 샘플 보기"):
+    sample_path = "dataset/side_view"
+    if os.path.exists(sample_path):
+        files = [f for f in os.listdir(sample_path) if f.endswith(('.jpg', '.jpeg', '.png'))]
+        if files:
+            # 랜덤 5장 출력
+            import random
+            samples = random.sample(files, min(5, len(files)))
+            cols = st.columns(5)
+            for i, img_name in enumerate(samples):
+                with cols[i]:
+                    st.image(os.path.join(sample_path, img_name), use_column_width=True)
+        else:
+            st.warning("폴더에 이미지 파일이 없습니다.")
+    else:
+        st.error("폴더를 찾을 수 없습니다.")
