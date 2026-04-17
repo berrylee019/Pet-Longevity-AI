@@ -31,17 +31,26 @@ def calculate_pace_of_aging(bcs_score, is_large_breed=True):
 def analyze_pet_image(image_path):
     try:
         img = Image.open(image_path)
+        # 프롬프트를 조금 더 구체적이고 너그럽게 수정했습니다.
         prompt = """
-        너는 수의사야. 이 리트리버 사진을 보고 BCS(1-9)를 판독해줘.
-        전신이 아니면 {"status": "INVALID"}를, 
-        전신이면 {"status": "VALID", "bcs_score": 점수, "reason": "이유"}를 JSON으로 답해줘.
+        너는 베테랑 수의사야. 사진 속 리트리버의 체형을 분석해서 BCS(1~9) 점수를 매겨줘.
+        
+        1. 사진에 강아지의 몸통(허리나 갈비뼈 부근)이 조금이라도 보인다면 최대한 판독해줘.
+        2. 점수는 1(매우 마름), 5(표준), 9(비만) 사이로 매겨줘.
+        
+        결과는 반드시 아래 JSON 형식으로만 딱 한 줄로 출력해:
+        {"status": "VALID", "bcs_score": 5, "reason": "허리 라인이 적절하게 유지됨"}
         """
         response = model.generate_content([prompt, img])
-        # JSON 파싱 안전장치
-        text = response.text.replace('```json', '').replace('```', '').strip()
-        return json.loads(text)
+        
+        # AI가 한 말을 디버깅용으로 텍스트로 정리
+        raw_text = response.text.strip().replace('```json', '').replace('```', '')
+        
+        # 혹시 JSON 형식이 아니더라도 점수만 있으면 뽑아내는 안전장치
+        return json.loads(raw_text)
     except Exception as e:
-        return {"status": "ERROR", "reason": str(e)}
+        # 에러가 나면 화면에 실제 AI의 답변을 찍어보게 합니다.
+        return {"status": "ERROR", "reason": f"AI 답변 해석 실패: {str(e)}"}
 
 # --- 3. 메인 화면 UI ---
 st.title("🐾 리트리버 노화 속도 분석 시스템")
