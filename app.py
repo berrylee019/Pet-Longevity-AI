@@ -65,7 +65,7 @@ def analyze_pet_image(image_path):
         return {"status": "ERROR", "reason": str(e)}
 
 # --- Step 3 UI 부분도 살짝 수정 (AI의 실제 말을 보기 위함) ---
-if st.button("🧠 AI 노화 속도 분석 시작", use_container_width=True):
+if st.button("🧠 AI 노화 속도 분석 시작", use_container_width=True, key="analysis_main_btn"):
     # ... (기존 폴더 체크 로직) ...
     for img_name in test_files:
         # ... (이미지 출력 로직) ...
