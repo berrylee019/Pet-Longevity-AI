@@ -31,18 +31,17 @@ def calculate_pace_of_aging(bcs_score, is_large_breed=True):
 def analyze_pet_image(image_path):
     try:
         img = Image.open(image_path)
-        # 형식을 따지지 말고 점수만 달라고 아주 강력하게 요청합니다.
         prompt = "수의사로서 이 사진 속 강아지의 BCS(1~9) 점수를 숫자 하나만 먼저 말하고, 그 뒤에 이유를 써줘."
         response = model.generate_content([prompt, img])
         res_text = response.text.strip()
         
-        # 텍스트에서 숫자만 쏙 뽑아내는 마법 (가장 안전한 방법)
         numbers = re.findall(r'[1-9]', res_text)
         bcs_val = int(numbers[0]) if numbers else 5
         
         return {"bcs": bcs_val, "reason": res_text}
-    except:
-        return {"bcs": 5, "reason": "분석 과정에서 일시적인 오류가 발생했습니다."}
+    except Exception as e:
+        # 이 부분이 핵심입니다! "일시적 오류" 대신 진짜 에러를 보여줍니다.
+        return {"bcs": 5, "reason": f"🚨 실제 에러 발생: {str(e)}"}
 
 # --- 2. 메인 화면 UI ---
 st.title("🐾 리트리버 노화 속도 분석 시스템")
