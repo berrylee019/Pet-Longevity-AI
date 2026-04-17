@@ -2,88 +2,109 @@ import streamlit as st
 import google.generativeai as genai
 import os
 import json
+import random
 from PIL import Image
 from icrawler.builtin import BingImageCrawler
 
-# 1. Gemini 설정 (Secrets에서 키 가져오기)
-try:
-    GOOGLE_API_KEY = st.secrets["GEMINI_API_KEY"]
-    genai.configure(api_key=GOOGLE_API_KEY)
-    model = genai.GenerativeModel('gemini-2.5-pro') # 최신 멀티모달 모델
-except:
-    st.error("Secrets에 GEMINI_API_KEY를 설정해주세요.")
+# --- 1. 기본 설정 및 보안 ---
+st.set_page_config(page_title="Pet Longevity AI", layout="centered")
 
-# 2. 사진 분석 함수 (AI 수의사 페르소나 적용)
+# Gemini 설정
+try:
+    if "GEMINI_API_KEY" in st.secrets:
+        genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+        model = genai.GenerativeModel('gemini-1.5-pro')
+    else:
+        st.warning("⚠️ Streamlit Secrets에 GEMINI_API_KEY를 설정해주세요.")
+except Exception as e:
+    st.error(f"설정 에러: {e}")
+
+# --- 2. 로직 함수들 ---
+def calculate_pace_of_aging(bcs_score, is_large_breed=True):
+    base_pace = 1.0
+    if bcs_score <= 3: pace = base_pace + (5 - bcs_score) * 0.1
+    elif 4 <= bcs_score <= 5: pace = base_pace
+    else: pace = base_pace + (bcs_score - 5) * 0.125
+    if is_large_breed: pace *= 1.15 
+    return round(pace, 2)
+
 def analyze_pet_image(image_path):
-    img = Image.open(image_path)
-    
-    # 털 많은 견종(말티즈/포메)까지 고려한 정교한 프롬프트
-    prompt = """
-    너는 20년 경력의 베테랑 수의사야. 이 리트리버 사진을 WSAVA BCS 9단계 기준으로 분석해줘.
-    
-    1. **품질 검사**: 사진에 강아지의 **몸 전체(갈비뼈, 허리, 복부)**가 명확히 보이니? 얼굴만 나오거나 털에 가려 체형 판단이 불가능하면 점수를 매기지 말고 'INVALID'라고 답해줘.
-    2. **채점 (BCS)**: 1~9 사이의 정수로 채점해줘.
-    3. **근거**: 갈비뼈의 만져짐 정도(시각적 유추), 위에서 본 허리 굴곡(모래시계 모양), 옆에서 본 복부 수축 라인을 근거로 제시해줘.
-    
-    결과는 반드시 JSON 형식으로만 출력해줘:
-    {
-        "status": "VALID" 또는 "INVALID",
-        "bcs_score": 5 (VALID일 경우),
-        "reason": "갈비뼈가 희미하게 보이며, 허리 라인이 선명함." (VALID일 경우)
-    }
-    """
-    
     try:
+        img = Image.open(image_path)
+        prompt = """
+        너는 수의사야. 이 리트리버 사진을 보고 BCS(1-9)를 판독해줘.
+        전신이 아니면 {"status": "INVALID"}를, 
+        전신이면 {"status": "VALID", "bcs_score": 점수, "reason": "이유"}를 JSON으로 답해줘.
+        """
         response = model.generate_content([prompt, img])
-        # JSON 결과 파싱 (실제 코드에서는 예외처리 필요)
-        import json
-        result = json.loads(response.text.replace('```json', '').replace('```', ''))
-        return result
+        # JSON 파싱 안전장치
+        text = response.text.replace('```json', '').replace('```', '').strip()
+        return json.loads(text)
     except Exception as e:
         return {"status": "ERROR", "reason": str(e)}
 
-    # app.py 코드 예시
+# --- 3. 메인 화면 UI ---
+st.title("🐾 리트리버 노화 속도 분석 시스템")
+st.info("데이터 수집부터 AI 판독까지 한 화면에서 진행합니다.")
 
-        st.header("Step 1. 데이터 수집 (리트리버)")
-        target_view = st.selectbox("수집할 각도", ["side_view", "top_view"])
-        download_count = st.slider("수집 개수", 10, 100, 20)
-        
-        if st.button("이미지 수집 시작"):
-            # 수집 로직...
-            st.success("수집 완료!")
-        
-# 3. UI에서 분석 실행 (예시)
-# --- 수정된 분석 섹션 로직 ---
-st.header("Step 2. 노화 속도 로직 테스트")
+# --- STEP 1: 데이터 수집 ---
+st.header("Step 1. 리트리버 이미지 수집")
+col1, col2 = st.columns([2, 1])
+with col1:
+    search_query = st.text_input("검색어", "Golden Retriever standing side view")
+with col2:
+    count = st.number_input("수집 개수", min_value=5, max_value=50, value=10)
 
-if st.button("수집된 데이터 AI 채점 시작"):
-    sample_path = "dataset/side_view"
+if st.button("🚀 이미지 수집 시작", use_container_width=True):
+    save_dir = "dataset/side_view"
+    if not os.path.exists(save_dir): os.makedirs(save_dir)
     
-    # 1. 폴더 존재 여부 확인 (안전 장치)
-    if not os.path.exists(sample_path):
-        st.error(f"📂 '{sample_path}' 폴더가 없습니다. 사이드바에서 먼저 [이미지 수집 시작] 버튼을 눌러주세요!")
+    with st.spinner("이미지를 긁어모으는 중..."):
+        crawler = BingImageCrawler(storage={'root_dir': save_dir})
+        crawler.crawl(keyword=search_query, max_num=count)
+    st.success(f"✅ {count}장의 이미지 수집 완료!")
+
+st.divider()
+
+# --- STEP 2: 수집 현황 및 샘플 확인 ---
+st.header("Step 2. 수집 데이터 확인")
+sample_path = "dataset/side_view"
+
+if os.path.exists(sample_path) and len(os.listdir(sample_path)) > 0:
+    files = [f for f in os.listdir(sample_path) if f.endswith(('.jpg', '.jpeg', '.png'))]
+    st.write(f"현재 폴더에 **{len(files)}**장의 사진이 있습니다.")
+    
+    if st.button("🖼️ 랜덤 샘플 3장 보기"):
+        samples = random.sample(files, min(3, len(files)))
+        cols = st.columns(3)
+        for i, img_name in enumerate(samples):
+            cols[i].image(os.path.join(sample_path, img_name), use_column_width=True)
+else:
+    st.warning("아직 수집된 데이터가 없습니다. Step 1을 먼저 진행해주세요.")
+
+st.divider()
+
+# --- STEP 3: AI 판독 ---
+st.header("Step 3. Gemini AI 수의사 채점")
+if st.button("🧠 AI 노화 속도 분석 시작", use_container_width=True):
+    if not os.path.exists(sample_path) or not os.listdir(sample_path):
+        st.error("분석할 이미지가 없습니다!")
     else:
-        # 2. 이미지 파일 리스트 가져오기
         files = [f for f in os.listdir(sample_path) if f.endswith(('.jpg', '.jpeg', '.png'))]
+        test_files = files[:3] # 우선 3장만 테스트
         
-        if not files:
-            st.warning("폴더는 있지만 저장된 이미지 파일이 없습니다. 수집을 다시 진행해 주세요.")
-        else:
-            # 5장만 테스트
-            target_files = files[:5] 
+        for img_name in test_files:
+            full_path = os.path.join(sample_path, img_name)
+            st.image(full_path, width=300)
             
-            for img_name in target_files:
-                full_path = os.path.join(sample_path, img_name)
-                st.image(full_path, caption=f"분석 대상: {img_name}", width=400)
-                
-                with st.spinner(f'{img_name} 분석 중...'):
-                    analysis = analyze_pet_image(full_path)
-                    
-                if analysis["status"] == "VALID":
-                    bcs = analysis["bcs_score"]
-                    pace = calculate_pace_of_aging(bcs)
-                    st.success(f"✅ BCS: {bcs}/9 | 노화 속도: {pace}x")
-                    st.info(f"📝 근거: {analysis['reason']}")
-                else:
-                    st.warning(f"⚠️ 건너뜀: {analysis.get('reason', '판독 불가')}")
-                st.divider()
+            with st.spinner("AI가 체형을 분석 중입니다..."):
+                res = analyze_pet_image(full_path)
+            
+            if res.get("status") == "VALID":
+                bcs = res["bcs_score"]
+                pace = calculate_pace_of_aging(bcs)
+                st.write(f"**결과:** BCS {bcs}/9 | **노화 속도:** {pace}배속")
+                st.caption(f"**이유:** {res['reason']}")
+            else:
+                st.warning("이 사진은 전신이 아니거나 분석이 불가능합니다.")
+            st.divider()
