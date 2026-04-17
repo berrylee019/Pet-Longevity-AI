@@ -76,3 +76,15 @@ with col2:
 
 st.divider()
 st.caption("본 서비스는 후성 유전학 기반의 노화 속도 개념을 반려견 체형 분석에 적용한 MVP 모델입니다.")
+
+# 수집 버튼 아래쪽이나 메인 화면 적당한 곳에 추가
+st.divider()
+st.subheader("현재 수집된 데이터 현황")
+
+paths = ["dataset/side_view", "dataset/top_view"]
+for p in paths:
+    if os.path.exists(p):
+        files = os.listdir(p)
+        st.write(f"📂 {p}: 현재 **{len(files)}**장의 사진이 모였습니다.")
+    else:
+        st.write(f"📂 {p}: 아직 폴더가 생성되지 않았습니다.")
