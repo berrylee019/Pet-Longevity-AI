@@ -42,6 +42,16 @@ def analyze_pet_image(image_path):
     except Exception as e:
         return {"status": "ERROR", "reason": str(e)}
 
+    # app.py 코드 예시
+    with st.sidebar:
+        st.header("Step 1. 데이터 수집 (리트리버)")
+        target_view = st.selectbox("수집할 각도", ["side_view", "top_view"])
+        download_count = st.slider("수집 개수", 10, 100, 20)
+        
+        if st.button("이미지 수집 시작"):
+            # 수집 로직...
+            st.success("수집 완료!")
+        
 # 3. UI에서 분석 실행 (예시)
 # --- 수정된 분석 섹션 로직 ---
 st.header("Step 2. 노화 속도 로직 테스트")
