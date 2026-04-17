@@ -28,41 +28,67 @@ def calculate_pace_of_aging(bcs_score, is_large_breed=True):
     if is_large_breed: pace *= 1.15 
     return round(pace, 2)
 
+import re
+
 def analyze_pet_image(image_path):
     try:
         img = Image.open(image_path)
-        # AI에게 서술형으로 답변해도 좋으니 점수만 확실히 달라고 요청
+        # 프롬프트를 더 직설적으로 바꿨습니다.
         prompt = """
-        너는 베테랑 수의사야. 사진 속 리트리버의 체형을 분석해줘.
-        
-        1. BCS(1~9) 점수를 판독해줘. (5가 표준)
-        2. 만약 전신이 아니라면 최대한 추측해서라도 점수를 주고 그 이유를 써줘.
-        
-        결과는 반드시 JSON 형식으로 출력해:
-        {"status": "VALID", "bcs_score": 5, "reason": "이유 설명"}
+        반려견 수의사로서 이 사진을 분석해.
+        1. BCS 점수를 1에서 9 사이의 숫자로만 말해.
+        2. 점수 매긴 이유를 한 문장으로 써.
+        형식: 점수 / 이유
+        예시: 5 / 갈비뼈가 만져지며 허리 라인이 뚜렷함.
         """
         response = model.generate_content([prompt, img])
         res_text = response.text.strip()
         
-        # [중요] AI의 실제 답변을 로그로 찍어서 확인 (에러 추적용)
-        print(f"AI Raw Response: {res_text}") 
+        # [디버깅] AI가 실제로 뭐라고 했는지 화면에 보이기 위해 저장
+        st.session_state['last_raw_response'] = res_text
         
-        # JSON 부분만 추출하는 마법 (문자열 전처리)
-        start_idx = res_text.find('{')
-        end_idx = res_text.rfind('}') + 1
-        if start_idx != -1 and end_idx != 0:
-            json_str = res_text[start_idx:end_idx]
-            return json.loads(json_str)
+        # 숫자만 추출 (예: "점수는 6점입니다" -> 6)
+        scores = re.findall(r'\d+', res_text)
+        
+        if scores:
+            bcs_val = int(scores[0])
+            # 숫자가 1~9 범위를 벗어나면 기본값 5
+            if not (1 <= bcs_val <= 9): bcs_val = 5
+            
+            return {
+                "status": "VALID",
+                "bcs_score": bcs_val,
+                "reason": res_text
+            }
         else:
-            # JSON이 없으면 텍스트에서 숫자라도 찾기
-            import re
-            scores = re.findall(r'\d+', res_text)
-            if scores:
-                return {"status": "VALID", "bcs_score": int(scores[0]), "reason": "텍스트 분석 결과"}
-                
-        return {"status": "INVALID", "reason": "AI 답변 형식 오류"}
+            return {"status": "INVALID", "reason": f"점수를 찾지 못함: {res_text}"}
+            
     except Exception as e:
         return {"status": "ERROR", "reason": str(e)}
+
+# --- Step 3 UI 수정 ---
+if st.button("🧠 AI 노화 속도 분석 시작", use_container_width=True, key="analysis_main_btn"):
+    # ... (기존 폴더 체크 로직 동일) ...
+    for img_name in test_files:
+        full_path = os.path.join(sample_path, img_name)
+        st.image(full_path, width=300)
+        
+        with st.spinner("AI가 돋보기를 들고 분석 중입니다..."):
+            res = analyze_pet_image(full_path)
+            
+        if res["status"] == "VALID":
+            bcs = res["bcs_score"]
+            pace = calculate_pace_of_aging(bcs)
+            
+            # 성공 화면 출력
+            st.success(f"✅ 판독 성공! (BCS {bcs}/9)")
+            st.metric("예상 노화 속도", f"{pace}x")
+            with st.expander("수의사 상세 소견 보기"):
+                st.write(res["reason"])
+        else:
+            # 실패 시 AI의 원문 답변을 그대로 노출
+            st.warning(f"⚠️ 판독 보류: {res['reason']}")
+        st.divider()
 
 # --- Step 3 UI 부분도 살짝 수정 (AI의 실제 말을 보기 위함) ---
 if st.button("🧠 AI 노화 속도 분석 시작", use_container_width=True, key="analysis_main_btn"):
