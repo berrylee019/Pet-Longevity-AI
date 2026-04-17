@@ -43,7 +43,7 @@ def analyze_pet_image(image_path):
         return {"status": "ERROR", "reason": str(e)}
 
     # app.py 코드 예시
-    with st.sidebar:
+
         st.header("Step 1. 데이터 수집 (리트리버)")
         target_view = st.selectbox("수집할 각도", ["side_view", "top_view"])
         download_count = st.slider("수집 개수", 10, 100, 20)
