@@ -2,3 +2,5 @@ streamlit
 icrawler
 torch
 torchvision
+google-generativeai
+Pillow
