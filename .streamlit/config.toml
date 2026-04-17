@@ -1,0 +1,8 @@
+[server]
+# 업로드 용량 제한 늘리기 (이미지 분석용)
+maxUploadSize = 200 
+
+[theme]
+primaryColor = "#F1C40F" # 리트리버 골드 컬러
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#FDFEFE"
