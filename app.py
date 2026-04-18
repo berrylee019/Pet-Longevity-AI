@@ -208,4 +208,4 @@ with tab3:
 
 # 하단 푸터
 st.divider()
-st.caption("본 플랫폼은 AI 기반 펫 테크 비즈니스 모델 검증용입니다. 제휴 문의: [형님의 비즈니스 메일]")
+st.caption("본 플랫폼은 AI 기반 펫 테크 비즈니스 모델 검증용입니다. 제휴 문의: bslee@yahoo.com")
