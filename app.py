@@ -145,7 +145,7 @@ st.set_page_config(page_title="Pet Longevity AI", layout="wide")
 if "GEMINI_API_KEY" in st.secrets:
     genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
     # 모델명 안정화 (gemini-1.5-flash 권장)
-    model = genai.GenerativeModel('gemini-1.5-flash')
+    model = genai.GenerativeModel('gemini-2.0-flash')
 else:
     st.error("API 키 설정이 필요합니다.")
 
