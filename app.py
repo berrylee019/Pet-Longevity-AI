@@ -52,7 +52,7 @@ def create_pdf_report(breed, bcs, pace, reason):
         
         # 타이틀 (크기 및 간격 최적화)
         pdf.set_font('NanumGothic', 'B', 18)
-        pdf.cell(0, 10, 'Anti-Aging & Body Condition Report', ln=True, align='C')
+        pdf.cell(0, 10, '', ln=True, align='C')
         pdf.ln(5)
         
         # 진단 결과 테이블 (높이 압축)
