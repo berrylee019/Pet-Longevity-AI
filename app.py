@@ -134,7 +134,7 @@ with tab1:
 with tab2:
     st.header("Step 1. 견종 데이터 수집")
     # 타 동물 제외 필터 추가
-    refined_query = st.text_input("검색 쿼리 최적화", f"{selected_breed} dog body condition score side top view -cat -horse -cow")
+    refined_query = st.text_input("검색 쿼리 최적화", f"{selected_breed} dog real photo body condition -chart -diagram -infographic -poster -text")
     if st.button("🚀 데이터 수집 및 DB 등록"):
         save_dir = f"dataset/multi_view/{selected_breed}"
         if not os.path.exists(save_dir): os.makedirs(save_dir)
@@ -169,21 +169,14 @@ with tab3:
         conn = sqlite3.connect('pet_analysis.db')
         df_c = pd.read_sql_query("SELECT * FROM collected_images", conn)
         
-        if not df_c.empty:
-            st.subheader("🧹 데이터 클리닝 (DB 정화)")
-            col_sel, col_btn = st.columns([3, 1])
-            with col_sel:
-                to_delete = st.multiselect("삭제할 데이터 ID를 선택하세요", df_c['id'].tolist())
-            with col_btn:
-                if st.button("🗑️ 선택 삭제", type="primary"):
-                    c = conn.cursor()
-                    for d_id in to_delete:
-                        c.execute("SELECT img_path FROM collected_images WHERE id = ?", (d_id,))
-                        path = c.fetchone()[0]
-                        if os.path.exists(path): os.remove(path)
-                        c.execute("DELETE FROM collected_images WHERE id = ?", (d_id,))
-                    conn.commit()
-                    st.rerun()
+        if st.checkbox("🖼️ 이미지 라이브러리 크게 보기", value=True):
+                # 한 줄에 2개씩 크게 보여줘서 글씨 유무를 확실히 판단하게 함
+                img_cols = st.columns(2) 
+                for i, row in df_c.iterrows():
+                    with img_cols[i % 2]:
+                        if os.path.exists(row['img_path']):
+                            st.image(row['img_path'], use_container_width=True)
+                            st.caption(f"ID: {row['id']} | {row['breed']}")
             
             st.divider()
             st.dataframe(df_c, use_container_width=True)
