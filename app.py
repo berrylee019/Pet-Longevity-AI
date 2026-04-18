@@ -2,13 +2,12 @@ import streamlit as st
 import google.generativeai as genai
 import os
 import sqlite3
-import pandas as pd
 import datetime
 import re
-import random
-from PIL import Image
+import pandas as pd
+import textwrap
+from PIL import Image, ImageDraw, ImageFont
 from icrawler.builtin import BingImageCrawler
-from fpdf import FPDF
 
 # --- 1. 시스템 초기화 및 DB 설정 ---
 def init_system():
@@ -17,15 +16,13 @@ def init_system():
         if not os.path.exists(path):
             os.makedirs(path)
     
-    # SQLite DB 초기화
     conn = sqlite3.connect('pet_analysis.db')
     c = conn.cursor()
-    # 1. 분석 결과 로그 테이블 (기존)
+    # 분석 로그 테이블
     c.execute('''CREATE TABLE IF NOT EXISTS analysis_logs
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT, 
-                  breed TEXT, side_img TEXT, top_img TEXT, 
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT, breed TEXT, side_img TEXT, top_img TEXT, 
                   bcs INTEGER, pace REAL, reason TEXT, date TEXT)''')
-    # 2. 수집된 원천 이미지 관리 테이블 (신규!)
+    # 수집 이미지 관리 테이블
     c.execute('''CREATE TABLE IF NOT EXISTS collected_images
                  (id INTEGER PRIMARY KEY AUTOINCREMENT, breed TEXT, img_path TEXT, 
                   source TEXT, collect_date TEXT)''')
@@ -34,227 +31,170 @@ def init_system():
 
 init_system()
 
-# --- 2. PDF 생성 클래스 ---
-class PetReport(FPDF):
-    def header(self):
-        self.set_font('Helvetica', 'B', 16)
-        self.cell(0, 10, 'AI Pet Health & Longevity Report', 0, 1, 'C')
-        self.ln(10)
+# --- 2. 핵심 로직 함수들 ---
 
-def create_pdf(breed, bcs, pace, reason):
-    # FPDF 대신 한글 지원을 위해 인코딩 설정을 넣습니다.
-    pdf = PetReport()
-    pdf.add_page()
-    
-    # [중요] 한글 폰트가 프로젝트 폴더에 있다면 아래 주석을 풀고 사용하세요.
-    # 만약 폰트 파일이 없다면 임시로 영어로 출력되게 아래에 안전장치를 걸어둡니다.
-    # pdf.add_font('Nanum', '', 'NanumGothic.ttf', unicode=True)
-    # pdf.set_font('Nanum', size=12)
+# 진단 카드 이미지 생성
+def create_diagnosis_card(breed, bcs, pace, reason):
+    try:
+        bg_path = "card_bg.png"
+        img = Image.open(bg_path) if os.path.exists(bg_path) else Image.new('RGB', (800, 1000), color=(255, 255, 255))
+        draw = ImageDraw.Draw(img)
+        
+        font_path = "NanumGothicBold.ttf"
+        if not os.path.exists(font_path):
+            st.error("⚠️ NanumGothicBold.ttf 파일이 필요합니다.")
+            return None
 
-    # 폰트가 없는 환경에서 에러를 방지하기 위해 '유니코드' 지원 설정을 강제합니다.
-    pdf.set_font("Helvetica", size=12) # 기본 폰트
-    
-    # 한글 에러를 피하기 위해 영어로 변환하거나 인코딩 에러를 무시하는 처리
-    safe_breed = breed.encode('ascii', 'ignore').decode('ascii') if not breed.isascii() else breed
-    
-    pdf.cell(0, 10, f"Analysis Date: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M')}", ln=1)
-    pdf.cell(0, 10, f"Target Breed: {breed}", ln=1) # 한글 지원 폰트 설정 전까진 영문 권장
-    pdf.cell(0, 10, f"BCS Score: {bcs} / 9", ln=1)
-    pdf.cell(0, 10, f"Predicted Aging Pace: {pace}x", ln=1)
-    pdf.ln(10)
-    
-    pdf.set_font("Helvetica", 'B', 12)
-    pdf.cell(0, 10, "AI Veterinarian Opinion:", ln=1)
-    pdf.set_font("Helvetica", size=11)
-    
-    # 한글이 포함된 reason을 출력할 때 에러가 안 나게 처리
-    # (진짜 한글 PDF를 뽑으려면 나눔폰트.ttf 파일을 업로드하고 add_font를 써야 합니다!)
-    pdf.multi_cell(0, 10, reason.encode('utf-8').decode('latin-1', 'replace')) 
-    
-    report_path = f"reports/report_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
-    pdf.output(report_path)
-    return report_path
+        font_title = ImageFont.truetype(font_path, 40)
+        font_data = ImageFont.truetype(font_path, 30)
+        font_reason = ImageFont.truetype(font_path, 20)
+        
+        # 텍스트 배치 (디자인에 맞춰 조정)
+        draw.text((320, 50), f"{breed}", font=font_title, fill=(255, 255, 255))
+        draw.text((220, 480), f"{bcs}", font=ImageFont.truetype(font_path, 80), fill=(0, 0, 0))
+        draw.text((610, 420), f"{pace}x", font=ImageFont.truetype(font_path, 60), fill=(200, 50, 50))
+        
+        # 소견 자동 줄바꿈
+        lines = textwrap.wrap(reason, width=40)
+        y_text = 680
+        for line in lines:
+            draw.text((80, y_text), line, font=font_reason, fill=(50, 50, 50))
+            y_text += 35
+            
+        card_path = f"cards/card_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
+        img.save(card_path)
+        return card_path
+    except Exception as e:
+        st.error(f"카드 생성 실패: {e}")
+        return None
 
-# --- 3. 비즈니스 로직 함수 ---
+# 노화 속도 계산
 def calculate_pace_of_aging(bcs_score, breed):
     base_pace = 1.0
-    if bcs_score <= 3:
-        pace = base_pace + (5 - bcs_score) * 0.12
-    elif 4 <= bcs_score <= 5:
-        pace = base_pace
-    else:
-        pace = base_pace + (bcs_score - 5) * 0.15
-    
-    # 리트리버는 대형견 가산치, 나머지는 소형견 기준으로 유지
-    if breed == "리트리버":
-        pace *= 1.15
+    if bcs_score <= 3: pace = base_pace + (5 - bcs_score) * 0.12
+    elif 4 <= bcs_score <= 5: pace = base_pace
+    else: pace = base_pace + (bcs_score - 5) * 0.15
+    if breed == "리트리버": pace *= 1.15
     return round(pace, 2)
 
+# AI 분석
 def analyze_pet_multi_view(side_img_path, top_img_path, breed_name):
     try:
         side_img = Image.open(side_img_path)
         top_img = Image.open(top_img_path)
-        
-        prompt = f"""
-        너는 베테랑 수의사야. 사진 속 견종은 '{breed_name}'이야.
-        제공된 두 장의 사진(옆모습, 윗모습)을 교차 분석해서 BCS 점수를 매겨줘.
-        
-        1. 옆모습: 복부 턱(Abdominal tuck)과 갈비뼈 부위 확인.
-        2. 윗모습: 허리 라인(Waist line)의 굴곡 확인.
-        
-        '{breed_name}'의 견종 특성(털의 양, 체형 특징)을 고려해서 최종 BCS(1~9) 점수와 근거를 말해줘.
-        결과는 반드시 '점수 / 근거' 형식으로 대답해줘.
-        """
-        
+        prompt = f"베테랑 수의사로서 {breed_name}의 옆/위 사진을 분석해 BCS 점수(1-9)와 근거를 '점수 / 근거' 형식으로 한글로 작성해줘."
         response = model.generate_content([prompt, side_img, top_img])
         res_text = response.text.strip()
-        
-        numbers = re.findall(r'[1-9]', res_text)
-        bcs_val = int(numbers[0]) if numbers else 5
+        bcs_val = int(re.findall(r'[1-9]', res_text)[0]) if re.findall(r'[1-9]', res_text) else 5
         return {"bcs": bcs_val, "reason": res_text}
-    except Exception as e:
-        return {"bcs": 5, "reason": f"분석 중 오류 발생: {str(e)}"}
+    except:
+        return {"bcs": 5, "reason": "분석 실패. 표준 체형으로 가정합니다."}
 
-# --- 4. Streamlit UI 설정 ---
-st.set_page_config(page_title="Pet Longevity AI - Multi-View", layout="wide")
+# --- 3. Streamlit UI ---
+st.set_page_config(page_title="Pet Longevity AI", layout="wide")
 
-# Gemini 설정
-try:
-    if "GEMINI_API_KEY" in st.secrets:
-        genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-        model = genai.GenerativeModel('gemini-2.5-flash') # 모델명 최신화
-    else:
-        st.warning("⚠️ Streamlit Secrets에 GEMINI_API_KEY를 설정해주세요.")
-except Exception as e:
-    st.error(f"설정 에러: {e}")
+# API 설정
+if "GEMINI_API_KEY" in st.secrets:
+    genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+    model = genai.GenerativeModel('gemini-2.5-flash')
 
-# 사이드바 설정
-st.sidebar.title("🐾 AI Pet Health")
 selected_breed = st.sidebar.selectbox("대상 견종 선택", ["리트리버", "말티즈", "푸들", "포메라니안"])
-st.sidebar.divider()
-st.sidebar.info("데이터베이스에 분석 이력이 자동으로 저장됩니다.")
+tab1, tab2, tab3 = st.tabs(["🔍 정밀 분석 카드", "🌐 이미지 수집", "📊 데이터 센터"])
 
-# 메인 화면
-st.title(f"🐾 {selected_breed} 노화 정밀 분석기")
-tab1, tab2, tab3 = st.tabs(["🔍 정밀 분석", "🌐 이미지 수집", "📊 데이터 히스토리"])
-
+# [Tab 1] 분석 및 카드 발급
 with tab1:
-    st.header("Step 2. AI 정밀 분석")
-    st.info(f"현재 선택된 견종: **{selected_breed}**")
-    
-    up_col1, up_col2 = st.columns(2)
-    with up_col1:
-        side_file = st.file_uploader("📸 옆모습 사진 (Side)", type=['jpg', 'jpeg', 'png'], key="side_up")
-    with up_col2:
-        top_file = st.file_uploader("📸 윗모습 사진 (Top)", type=['jpg', 'jpeg', 'png'], key="top_up")
+    st.header("Step 2. AI 진단서 발급")
+    col1, col2 = st.columns(2)
+    with col1: side_file = st.file_uploader("옆모습", type=['jpg', 'png'])
+    with col2: top_file = st.file_uploader("윗모습", type=['jpg', 'png'])
 
-    if st.button("🧠 AI 수의사 정밀 진단 시작", use_container_width=True):
+    if st.button("🧠 진단 카드 생성", use_container_width=True):
         if side_file and top_file:
-            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-            side_path = f"database_images/{timestamp}_side.png"
-            top_path = f"database_images/{timestamp}_top.png"
+            t_stamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+            s_path, t_path = f"database_images/{t_stamp}_s.png", f"database_images/{t_stamp}_t.png"
+            with open(s_path, "wb") as f: f.write(side_file.getbuffer())
+            with open(t_path, "wb") as f: f.write(top_file.getbuffer())
             
-            with open(side_path, "wb") as f: f.write(side_file.getbuffer())
-            with open(top_path, "wb") as f: f.write(top_file.getbuffer())
+            res = analyze_pet_multi_view(s_path, t_path, selected_breed)
+            pace = calculate_pace_of_aging(res["bcs"], selected_breed)
             
-            with st.spinner(f"{selected_breed} 데이터를 대조 분석 중..."):
-                res = analyze_pet_multi_view(side_path, top_path, selected_breed)
-                
-            bcs = res["bcs"]
-            pace = calculate_pace_of_aging(bcs, selected_breed)
-            
-            # DB 저장 로직
             conn = sqlite3.connect('pet_analysis.db')
-            c = conn.cursor()
-            c.execute("INSERT INTO analysis_logs (breed, side_img, top_img, bcs, pace, reason, date) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                      (selected_breed, side_path, top_path, bcs, pace, res["reason"], datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')))
+            conn.cursor().execute("INSERT INTO analysis_logs (breed, side_img, top_img, bcs, pace, reason, date) VALUES (?,?,?,?,?,?,?)",
+                                 (selected_breed, s_path, t_path, res["bcs"], pace, res["reason"], datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')))
             conn.commit()
             conn.close()
 
-            # 결과 대시보드
-            st.divider()
-            c1, c2 = st.columns(2)
-            with c1: st.metric(label="최종 판독 BCS", value=f"{bcs} / 9")
-            with c2: st.metric(label="예상 노화 속도", value=f"{pace} 배속")
-                
-            st.success("✨ 분석 완료 및 DB 저장이 완료되었습니다.")
-            
-            with st.expander("📄 AI 수의사 정밀 판독서 보기", expanded=True):
-                st.write(res['reason'])
-            
-            # PDF 다운로드
-            pdf_path = create_pdf(selected_breed, bcs, pace, res["reason"])
-            with open(pdf_path, "rb") as f:
-                st.download_button("📥 PDF 진단서 다운로드", f, file_name=f"{selected_breed}_진단리포트_{timestamp}.pdf")
-        else:
-            st.error("두 장의 사진을 모두 업로드해주세요.")
+            card = create_diagnosis_card(selected_breed, res["bcs"], pace, res["reason"])
+            if card:
+                st.image(card, width=600)
+                with open(card, "rb") as f:
+                    st.download_button("📥 카드 저장", f, file_name=f"report_{selected_breed}.png")
 
+# [Tab 2] 이미지 수집 (검색어 필터 강화)
 with tab2:
-    st.header("Step 1. 견종별 원천 데이터 수집")
-    search_query = st.text_input("검색어", f"{selected_breed} body condition score side top view")
-    
-    if st.button("🚀 이미지 수집 및 DB 인덱싱 시작"):
+    st.header("Step 1. 견종 데이터 수집")
+    # 타 동물 제외 필터 추가
+    refined_query = st.text_input("검색 쿼리 최적화", f"{selected_breed} dog body condition score side top view -cat -horse -cow")
+    if st.button("🚀 데이터 수집 및 DB 등록"):
         save_dir = f"dataset/multi_view/{selected_breed}"
-        if not os.path.exists(save_dir): 
-            os.makedirs(save_dir)
-        
-        # --- [에러 해결 구간] 들여쓰기 주의! ---
-        with st.spinner(f"Bing에서 {selected_breed} 이미지를 수집 중입니다..."):
+        if not os.path.exists(save_dir): os.makedirs(save_dir)
+        with st.spinner("이미지 수집 중..."):
             crawler = BingImageCrawler(storage={'root_dir': save_dir})
-            crawler.crawl(keyword=search_query, max_num=10)
+            crawler.crawl(keyword=refined_query, max_num=10)
         
-        # --- DB에 수집 정보 기록 ---
         conn = sqlite3.connect('pet_analysis.db')
         c = conn.cursor()
-        
-        collected_files = os.listdir(save_dir)
-        new_records = 0
-        for file_name in collected_files:
-            file_path = os.path.join(save_dir, file_name)
-            # 중복 체크
-            c.execute("SELECT id FROM collected_images WHERE img_path = ?", (file_path,))
+        for f_name in os.listdir(save_dir):
+            f_path = os.path.join(save_dir, f_name)
+            c.execute("SELECT id FROM collected_images WHERE img_path = ?", (f_path,))
             if not c.fetchone():
-                c.execute("INSERT INTO collected_images (breed, img_path, source, collect_date) VALUES (?, ?, ?, ?)",
-                          (selected_breed, file_path, "Bing Crawler", datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')))
-                new_records += 1
-        
+                c.execute("INSERT INTO collected_images (breed, img_path, source, collect_date) VALUES (?,?,?,?)",
+                          (selected_breed, f_path, "Bing", datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')))
         conn.commit()
         conn.close()
-        st.success(f"✅ {selected_breed} 이미지 {new_records}건이 새롭게 DB에 등록되었습니다!")
+        st.success("데이터베이스 동기화 완료!")
 
+# [Tab 3] 데이터 센터 (DB 정화 코드 포함)
 with tab3:
-    st.header("📊 데이터 센터")
-    hist_tab1, hist_tab2 = st.tabs(["📝 분석 이력", "🖼️ 수집 데이터 라이브러리"])
+    st.header("📊 데이터 관리 및 정화")
+    log_tab, coll_tab = st.tabs(["📋 분석 로그", "🖼️ 수집 라이브러리"])
     
-    with hist_tab1:
-        st.subheader("📋 AI 분석 로그")
+    with log_tab:
         conn = sqlite3.connect('pet_analysis.db')
-        df_logs = pd.read_sql_query("SELECT * FROM analysis_logs ORDER BY id DESC", conn)
+        df_l = pd.read_sql_query("SELECT * FROM analysis_logs", conn)
+        st.dataframe(df_l, use_container_width=True)
         conn.close()
-        if not df_logs.empty:
-            st.dataframe(df_logs, use_container_width=True)
-        else:
-            st.write("아직 분석 이력이 없습니다.")
-        
-    with hist_tab2:
-        st.subheader("🌐 수집된 원본 이미지셋")
+
+    with coll_tab:
         conn = sqlite3.connect('pet_analysis.db')
-        df_collected = pd.read_sql_query("SELECT * FROM collected_images ORDER BY id DESC", conn)
-        conn.close()
+        df_c = pd.read_sql_query("SELECT * FROM collected_images", conn)
         
-        if not df_collected.empty:
-            filter_breed = st.selectbox("견종 필터", ["전체"] + list(df_collected['breed'].unique()))
-            display_df = df_collected if filter_breed == "전체" else df_collected[df_collected['breed'] == filter_breed]
-            st.dataframe(display_df, use_container_width=True)
+        if not df_c.empty:
+            st.subheader("🧹 데이터 클리닝 (DB 정화)")
+            col_sel, col_btn = st.columns([3, 1])
+            with col_sel:
+                to_delete = st.multiselect("삭제할 데이터 ID를 선택하세요", df_c['id'].tolist())
+            with col_btn:
+                if st.button("🗑️ 선택 삭제", type="primary"):
+                    c = conn.cursor()
+                    for d_id in to_delete:
+                        c.execute("SELECT img_path FROM collected_images WHERE id = ?", (d_id,))
+                        path = c.fetchone()[0]
+                        if os.path.exists(path): os.remove(path)
+                        c.execute("DELETE FROM collected_images WHERE id = ?", (d_id,))
+                    conn.commit()
+                    st.rerun()
             
+            st.divider()
+            st.dataframe(df_c, use_container_width=True)
             if st.checkbox("이미지 갤러리 보기"):
-                cols = st.columns(3)
-                for idx, row in display_df.head(12).iterrows():
-                    with cols[idx % 3]:
-                        if os.path.exists(row['img_path']):
-                            st.image(row['img_path'], caption=f"{row['breed']} (ID:{row['id']})")
+                idx_cols = st.columns(4)
+                for i, row in df_c.iterrows():
+                    with idx_cols[i % 4]:
+                        st.image(row['img_path'], caption=f"ID: {row['id']}")
         else:
-            st.write("수집된 데이터가 없습니다. Step 1에서 수집을 먼저 진행해 주세요.")
+            st.info("데이터가 없습니다.")
+        conn.close()
 
 # 하단 푸터
 st.divider()
