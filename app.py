@@ -26,7 +26,7 @@ def init_system():
 
 init_system()
 
-# --- 2. PDF 생성 로직 (상단 로고 및 레이아웃 최적화) ---
+# --- 2. PDF 생성 로직 (하단 비즈니스 문구 업데이트) ---
 class PetReportPDF(FPDF):
     def header(self):
         header_img = "card_bg1.png"
@@ -74,17 +74,22 @@ def create_pdf_report(breed, bcs, pace, reason):
         pdf.set_x(start_x)
         pdf.multi_cell(table_width, 10, clean_reason, border=0, align='L')
         
+        # --- 형님 요청 문구 추가 (하단부) ---
         pdf.set_y(265)
-        pdf.set_font('NanumGothic', 'B', 10)
+        pdf.set_font('NanumGothic', 'B', 11)
+        pdf.set_text_color(200, 0, 0) # 강조를 위해 붉은색 톤 적용
+        pdf.cell(0, 10, '초정밀 분석 요청 : bslee@yahoo.com', align='C', ln=True)
+        
+        pdf.set_font('NanumGothic', 'B', 9)
         pdf.set_text_color(160, 160, 160)
-        pdf.cell(0, 10, '제작: [견종별 노화 정밀 분석기] | 다이어트 체험단 모집 중', align='C')
+        pdf.cell(0, 5, '제작: [견종별 노화 정밀 분석기] | 본 보고서는 AI 시뮬레이션 결과입니다.', align='C')
         
         report_path = f"reports/Report_{breed}_{datetime.datetime.now().strftime('%Y%m%d%H%M')}.pdf"
         pdf.output(report_path)
         return report_path
     except: return None
 
-# --- 3. AI 분석 및 계산 로직 ---
+# --- 3. AI 분석 및 노화 속도 계산 로직 ---
 def analyze_pet_multi_view(side_img_path, top_img_path, breed_name):
     try:
         side_img = Image.open(side_img_path)
@@ -106,8 +111,10 @@ def analyze_pet_multi_view(side_img_path, top_img_path, breed_name):
     except: return {"bcs": 5, "reason": "AI 분석 중 오류가 발생했습니다."}
 
 def calculate_pace_of_aging(bcs, breed):
+    # 기본 노화 배속 1.0 (정상)
+    # 표준 점수(5점)에서 멀어질수록 배속 증가
     pace = 1.0 + (abs(5-bcs) * 0.15)
-    if breed == "리트리버": pace *= 1.15
+    if breed == "리트리버": pace *= 1.15 # 대형견 가중치
     return round(pace, 2)
 
 # --- 4. Streamlit UI ---
@@ -115,7 +122,7 @@ st.set_page_config(page_title="Pet Longevity AI", layout="wide")
 
 if "GEMINI_API_KEY" in st.secrets:
     genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-    model = genai.GenerativeModel('gemini-2.5-flash')
+    model = genai.GenerativeModel('gemini-1.5-flash')
 
 st.sidebar.title("🐾 시스템 설정")
 selected_breed = st.sidebar.selectbox("대상 견종 선택", ["리트리버", "말티즈", "푸들", "포메라니안"])
@@ -152,56 +159,37 @@ with tabs[0]:
         else:
             st.warning("사진 2장을 모두 업로드해주세요.")
 
-# [Tab 1] 고품질 멀티 소스 수집 (강화 버전)
+# [Tab 1] 고품질 이미지 수집 (강화 필터 유지)
 if is_admin:
     with tabs[1]:
         st.header("🌐 고품질 데이터 수집 (Filter 강화)")
-        st.info("💡 실제 사진 위주로 수집하기 위해 도표/텍스트 필터가 자동 적용됩니다.")
-        
-        # 최적화된 필터 쿼리 자동 생성
         refined_query = f"{selected_breed} dog full body photo side view -chart -diagram -text -table -infographic"
-        query = st.text_input("수정된 검색 쿼리", refined_query)
-        
-        sources = st.multiselect("수집 출처 선택", ["Google", "Bing", "Baidu"], default=["Google", "Bing", "Baidu"])
-        max_imgs = st.slider("소스당 수집 개수", 5, 50, 15)
+        query = st.text_input("최적화 쿼리", refined_query)
+        sources = st.multiselect("출처", ["Google", "Bing", "Baidu"], default=["Google", "Bing", "Baidu"])
+        max_imgs = st.slider("수량", 5, 50, 15)
         
         if st.button("🚀 필터링 수집 시작"):
             save_base = f"dataset/multi_view/{selected_breed}"
             conn = sqlite3.connect('pet_analysis.db')
-            
             for src in sources:
                 src_dir = os.path.join(save_base, src.lower())
                 if not os.path.exists(src_dir): os.makedirs(src_dir)
-                
-                with st.spinner(f"{src} 소스에서 고품질 이미지 필터링 수집 중..."):
-                    try:
-                        # 소스별 맞춤형 쿼리 튜닝
-                        search_keyword = query
-                        if src == "Baidu":
-                            search_keyword = f"{selected_breed} 狗狗 侧面 真实照片 -图表 -文字"
-                        
-                        if src == "Google":
-                            crawler = GoogleImageCrawler(storage={'root_dir': src_dir})
-                        elif src == "Bing":
-                            crawler = BingImageCrawler(storage={'root_dir': src_dir})
-                        elif src == "Baidu":
-                            crawler = BaiduImageCrawler(storage={'root_dir': src_dir})
-                        
-                        crawler.crawl(keyword=search_keyword, max_num=max_imgs)
-                        
-                        # 파일 DB 등록 (중복 체크 포함)
-                        for f_name in os.listdir(src_dir):
-                            f_path = os.path.join(src_dir, f_name)
-                            existing = conn.cursor().execute("SELECT id FROM collected_images WHERE img_path=?", (f_path,)).fetchone()
-                            if not existing:
-                                conn.cursor().execute("INSERT INTO collected_images (breed, img_path, source, collect_date) VALUES (?,?,?,?)",
-                                                     (selected_breed, f_path, src, datetime.datetime.now().strftime('%Y-%m-%d %H:%M')))
-                    except Exception as e:
-                        st.error(f"{src} 수집 실패: {e}")
-            
+                try:
+                    search_keyword = query if src != "Baidu" else f"{selected_breed} 狗狗 侧面 真实照片 -图表 -文字"
+                    crawler = GoogleImageCrawler(storage={'root_dir': src_dir}) if src == "Google" else \
+                              BingImageCrawler(storage={'root_dir': src_dir}) if src == "Bing" else \
+                              BaiduImageCrawler(storage={'root_dir': src_dir})
+                    crawler.crawl(keyword=search_keyword, max_num=max_imgs)
+                    for f_name in os.listdir(src_dir):
+                        f_path = os.path.join(src_dir, f_name)
+                        if not conn.cursor().execute("SELECT id FROM collected_images WHERE img_path=?", (f_path,)).fetchone():
+                            conn.cursor().execute("INSERT INTO collected_images (breed, img_path, source, collect_date) VALUES (?,?,?,?)",
+                                                 (selected_breed, f_path, src, datetime.datetime.now().strftime('%Y-%m-%d %H:%M')))
+                except Exception as e: st.error(f"{src} 에러: {e}")
             conn.commit()
             conn.close()
-            st.success("고품질 수집이 완료되었습니다!")
+            st.success("완료!")
+
 
     # [Tab 2] 데이터 센터
     with tabs[2]:
