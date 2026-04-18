@@ -14,7 +14,7 @@ st.set_page_config(page_title="Pet Longevity AI - Multi-View", layout="centered"
 try:
     if "GEMINI_API_KEY" in st.secrets:
         genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-        model = genai.GenerativeModel('gemini-1.5-flash')
+        model = genai.GenerativeModel('gemini-2.5-flash')
     else:
         st.warning("⚠️ Streamlit Secrets에 GEMINI_API_KEY를 설정해주세요.")
 except Exception as e:
