@@ -50,7 +50,7 @@ def create_pdf_report(breed, bcs, pace, reason):
         pdf.add_page()
         
         pdf.set_font('Arial', 'B', 18)
-        pdf.cell(0, 10, 'Anti-Aging & Body Condition Report', ln=True, align='C')
+        pdf.cell(0, 10, '', ln=True, align='C')
         pdf.ln(5)
         
         kst_time = get_kst_now().strftime('%Y-%m-%d %H:%M')
