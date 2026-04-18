@@ -130,24 +130,19 @@ st.sidebar.divider()
 admin_pass = st.sidebar.text_input("관리자 비번", type="password")
 is_admin = (admin_pass == "2004")
 
-tab_list = ["🔍 정밀 분석 및 PDF"]
-if is_admin: tab_list += ["🌐 고품질 이미지 수집", "📊 데이터 센터"]
-tabs = st.tabs(tab_list)
+tabs = st.tabs(["🔍 정밀 분석 및 PDF"] + (["🌐 고품질 이미지 수집", "📊 데이터 센터"] if is_admin else []))
 
-# [Tab 0] 분석 및 발급
 with tabs[0]:
     st.header("🐶 AI 수의사 노화 정밀 진단")
     c1, c2 = st.columns(2)
     with c1: side_f = st.file_uploader("옆모습 업로드", type=['jpg', 'jpeg', 'png'], key="side_f")
     with c2: top_f = st.file_uploader("윗모습 업로드", type=['jpg', 'jpeg', 'png'], key="top_f")
-    
     if st.button("🧠 분석 실행 및 리포트 생성", use_container_width=True):
         if side_f and top_f:
             t_stamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
             s_p, t_p = f"database_images/{t_stamp}_s.png", f"database_images/{t_stamp}_t.png"
             with open(s_p, "wb") as f: f.write(side_f.getbuffer())
             with open(t_p, "wb") as f: f.write(top_f.getbuffer())
-            
             with st.spinner("AI 분석 중..."):
                 res = analyze_pet_multi_view(s_p, t_p, selected_breed)
                 pace = calculate_pace_of_aging(res["bcs"], selected_breed)
@@ -156,8 +151,7 @@ with tabs[0]:
                 if pdf_p:
                     with open(pdf_p, "rb") as f:
                         st.download_button("📄 PDF 진단서 다운로드", f, file_name=f"Report_{selected_breed}.pdf", use_container_width=True)
-        else:
-            st.warning("사진 2장을 모두 업로드해주세요.")
+        else: st.warning("사진 2장을 모두 업로드해주세요.")
 
 # [Tab 1] 고품질 이미지 수집 (강화 필터 유지)
 if is_admin:
