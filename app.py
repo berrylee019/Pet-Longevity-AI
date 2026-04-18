@@ -12,17 +12,22 @@ from fpdf import FPDF
 # --- 1. 시스템 초기화 및 DB 설정 ---
 def init_system():
     # 저장용 폴더 생성
-    for path in ["dataset/multi_view", "reports", "database_images"]:
+    for path in ["dataset/multi_view", "cards", "database_images"]:
         if not os.path.exists(path):
             os.makedirs(path)
     
     # SQLite DB 초기화
     conn = sqlite3.connect('pet_analysis.db')
     c = conn.cursor()
+    # 1. 분석 결과 로그 테이블 (기존)
     c.execute('''CREATE TABLE IF NOT EXISTS analysis_logs
                  (id INTEGER PRIMARY KEY AUTOINCREMENT, 
                   breed TEXT, side_img TEXT, top_img TEXT, 
                   bcs INTEGER, pace REAL, reason TEXT, date TEXT)''')
+    # 2. 수집된 원천 이미지 관리 테이블 (신규!)
+    c.execute('''CREATE TABLE IF NOT EXISTS collected_images
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT, breed TEXT, img_path TEXT, 
+                  source TEXT, collect_date TEXT)''')
     conn.commit()
     conn.close()
 
@@ -189,9 +194,28 @@ with tab2:
     if st.button("🚀 이미지 수집 시작"):
         save_dir = f"dataset/multi_view/{selected_breed}"
         if not os.path.exists(save_dir): os.makedirs(save_dir)
+        with st.spinner(f"Bing에서 {selected_breed} 이미지를 수집 중입니다..."):     
         crawler = BingImageCrawler(storage={'root_dir': save_dir})
         crawler.crawl(keyword=search_query, max_num=10)
-        st.success(f"{selected_breed} 관련 이미지 수집 완료!")
+
+        # --- DB에 수집 정보 기록 (추가된 로직) ---
+        conn = sqlite3.connect('pet_analysis.db')
+        c = conn.cursor()
+        
+        collected_files = os.listdir(save_dir)
+        new_records = 0
+        for file_name in collected_files:
+            file_path = os.path.join(save_dir, file_name)
+            # 중복 체크 (동일 경로가 없을 때만 저장)
+            c.execute("SELECT id FROM collected_images WHERE img_path = ?", (file_path,))
+            if not c.fetchone():
+                c.execute("INSERT INTO collected_images (breed, img_path, source, collect_date) VALUES (?, ?, ?, ?)",
+                          (selected_breed, file_path, "Bing Crawler", datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')))
+                new_records += 1
+        
+        conn.commit()
+        conn.close()
+        st.success(f"✅ {selected_breed} 이미지 {new_records}건이 새롭게 DB에 등록되었습니다!")
 
 with tab3:
     st.header("📊 분석 이력 데이터 (DB)")
