@@ -237,11 +237,88 @@ if is_admin:
             st.success("Check the Data Center for results!")
 
     with tabs[2]:
-        st.header("📊 Admin Data Center")
-        # (Log viewing and cleaning logic same as original, labels in English)
-        conn = sqlite3.connect('pet_analysis.db')
-        st.dataframe(pd.read_sql_query("SELECT * FROM analysis_logs ORDER BY id DESC", conn), use_container_width=True)
-        conn.close()
+            st.header("📊 Admin Data Center")
+            l_tab, c_tab = st.tabs(["📋 Analysis Logs", "🖼️ Image Gallery & Cleanup"])
+            
+            # 1. Analysis Logs (Existing)
+            with l_tab:
+                conn = sqlite3.connect('pet_analysis.db')
+                df_logs = pd.read_sql_query("SELECT * FROM analysis_logs ORDER BY id DESC", conn)
+                st.dataframe(df_logs, use_container_width=True)
+                conn.close()
+    
+            # 2. Image Gallery & Deletion (New Feature)
+            with c_tab:
+                st.subheader("🖼️ Collected Image Management")
+                
+                conn = sqlite3.connect('pet_analysis.db')
+                # Fetch images filtered by selected breed to keep it organized
+                df_imgs = pd.read_sql_query("SELECT * FROM collected_images WHERE breed = ? ORDER BY id DESC", conn, params=(selected_breed,))
+                conn.close()
+    
+                if df_imgs.empty:
+                    st.info(f"No collected images found for **{selected_breed}**.")
+                else:
+                    st.write(f"Total images for {selected_breed}: {len(df_imgs)}")
+                    
+                    # Use columns to create a gallery grid (4 images per row)
+                    cols = st.columns(4)
+                    for index, row in df_imgs.iterrows():
+                        with cols[index % 4]:
+                            img_id = row['id']
+                            img_path = row['img_path']
+                            
+                            if os.path.exists(img_path):
+                                # Display Image
+                                st.image(img_path, use_container_width=True, caption=f"Source: {row['source']}")
+                                
+                                # Delete Button for each image
+                                if st.button(f"🗑️ Delete #{img_id}", key=f"del_{img_id}"):
+                                    try:
+                                        # 1. Delete actual file
+                                        if os.path.exists(img_path):
+                                            os.remove(img_path)
+                                        
+                                        # 2. Delete from SQLite DB
+                                        conn = sqlite3.connect('pet_analysis.db')
+                                        cur = conn.cursor()
+                                        cur.execute("DELETE FROM collected_images WHERE id = ?", (img_id,))
+                                        conn.commit()
+                                        conn.close()
+                                        
+                                        st.success(f"Deleted #{img_id}")
+                                        st.rerun() # Refresh page to update gallery
+                                    except Exception as e:
+                                        st.error(f"Error: {e}")
+                            else:
+                                # If file is missing but DB entry exists
+                                st.warning(f"File missing: {img_id}")
+                                if st.button(f"Clean DB #{img_id}", key=f"clean_{img_id}"):
+                                    conn = sqlite3.connect('pet_analysis.db')
+                                    cur = conn.cursor()
+                                    cur.execute("DELETE FROM collected_images WHERE id = ?", (img_id,))
+                                    conn.commit()
+                                    conn.close()
+                                    st.rerun()
+    
+                    st.divider()
+                    # Bulk Delete Option
+                    if st.button("🚨 Clear All Collected Images for this Breed", type="secondary"):
+                        confirm = st.checkbox("Confirm bulk delete?")
+                        if confirm:
+                            try:
+                                for p in df_imgs['img_path']:
+                                    if os.path.exists(p): os.remove(p)
+                                
+                                conn = sqlite3.connect('pet_analysis.db')
+                                cur = conn.cursor()
+                                cur.execute("DELETE FROM collected_images WHERE breed = ?", (selected_breed,))
+                                conn.commit()
+                                conn.close()
+                                st.success("All images cleared.")
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Error: {e}")
 
 st.divider()
 st.caption("Partnerships & Media Inquiry: bslee@yahoo.com")
