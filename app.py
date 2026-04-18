@@ -218,17 +218,34 @@ with tab2:
         st.success(f"✅ {selected_breed} 이미지 {new_records}건이 새롭게 DB에 등록되었습니다!")
 
 with tab3:
-    st.header("📊 분석 이력 데이터 (DB)")
-    conn = sqlite3.connect('pet_analysis.db')
-    import pandas as pd
-    df = pd.read_sql_query("SELECT * FROM analysis_logs ORDER BY id DESC", conn)
-    conn.close()
+    hist_tab1, hist_tab2 = st.tabs(["📝 분석 이력", "🖼️ 수집 데이터 라이브러리"])
     
-    if not df.empty:
-        st.dataframe(df, use_container_width=True)
-        st.caption("DB에 저장된 실제 데이터입니다. 제휴 병원 및 비즈니스 분석용 자산으로 활용됩니다.")
-    else:
-        st.write("아직 저장된 데이터가 없습니다.")
+    with hist_tab1:
+        # 기존 분석 이력 조회 코드 (df = pd.read_sql_query("SELECT * FROM analysis_logs..."))
+        pass
+        
+    with hist_tab2:
+        st.subheader("🌐 수집된 이미지 데이터셋")
+        conn = sqlite3.connect('pet_analysis.db')
+        df_collected = pd.read_sql_query("SELECT * FROM collected_images ORDER BY id DESC", conn)
+        conn.close()
+        
+        if not df_collected.empty:
+            # 견종별로 필터링해서 볼 수 있게 필터 추가
+            filter_breed = st.selectbox("견종 필터", ["전체"] + list(df_collected['breed'].unique()))
+            display_df = df_collected if filter_breed == "전체" else df_collected[df_collected['breed'] == filter_breed]
+            
+            st.dataframe(display_df, use_container_width=True)
+            
+            # 필요할 때 이미지 불러와서 확인하기 (갤러리 형태)
+            if st.checkbox("이미지 미리보기 활성화"):
+                cols = st.columns(3)
+                for idx, row in display_df.head(12).iterrows(): # 너무 많으면 느려지니 12개만
+                    with cols[idx % 3]:
+                        if os.path.exists(row['img_path']):
+                            st.image(row['img_path'], caption=f"{row['breed']} ({row['id']})")
+        else:
+            st.write("아직 수집된 데이터가 없습니다.")
 
 # 하단 푸터
 st.divider()
