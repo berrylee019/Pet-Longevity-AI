@@ -189,16 +189,20 @@ with tab1:
             st.error("두 장의 사진을 모두 업로드해주세요.")
 
 with tab2:
-    st.header("Step 1. 테스트 이미지 수집")
+    st.header("Step 1. 견종별 원천 데이터 수집")
     search_query = st.text_input("검색어", f"{selected_breed} body condition score side top view")
-    if st.button("🚀 이미지 수집 시작"):
+    
+    if st.button("🚀 이미지 수집 및 DB 인덱싱 시작"):
         save_dir = f"dataset/multi_view/{selected_breed}"
-        if not os.path.exists(save_dir): os.makedirs(save_dir)
-        with st.spinner(f"Bing에서 {selected_breed} 이미지를 수집 중입니다..."):     
+        if not os.path.exists(save_dir): 
+            os.makedirs(save_dir)
+        
+        # --- [에러 해결 구간] 들여쓰기 주의! ---
+        with st.spinner(f"Bing에서 {selected_breed} 이미지를 수집 중입니다..."):
             crawler = BingImageCrawler(storage={'root_dir': save_dir})
             crawler.crawl(keyword=search_query, max_num=10)
-
-        # --- DB에 수집 정보 기록 (추가된 로직) ---
+        
+        # --- DB에 수집 정보 기록 ---
         conn = sqlite3.connect('pet_analysis.db')
         c = conn.cursor()
         
@@ -206,7 +210,7 @@ with tab2:
         new_records = 0
         for file_name in collected_files:
             file_path = os.path.join(save_dir, file_name)
-            # 중복 체크 (동일 경로가 없을 때만 저장)
+            # 중복 체크
             c.execute("SELECT id FROM collected_images WHERE img_path = ?", (file_path,))
             if not c.fetchone():
                 c.execute("INSERT INTO collected_images (breed, img_path, source, collect_date) VALUES (?, ?, ?, ?)",
@@ -218,34 +222,38 @@ with tab2:
         st.success(f"✅ {selected_breed} 이미지 {new_records}건이 새롭게 DB에 등록되었습니다!")
 
 with tab3:
+    st.header("📊 데이터 센터")
     hist_tab1, hist_tab2 = st.tabs(["📝 분석 이력", "🖼️ 수집 데이터 라이브러리"])
     
     with hist_tab1:
-        # 기존 분석 이력 조회 코드 (df = pd.read_sql_query("SELECT * FROM analysis_logs..."))
-        pass
+        st.subheader("📋 AI 분석 로그")
+        conn = sqlite3.connect('pet_analysis.db')
+        df_logs = pd.read_sql_query("SELECT * FROM analysis_logs ORDER BY id DESC", conn)
+        conn.close()
+        if not df_logs.empty:
+            st.dataframe(df_logs, use_container_width=True)
+        else:
+            st.write("아직 분석 이력이 없습니다.")
         
     with hist_tab2:
-        st.subheader("🌐 수집된 이미지 데이터셋")
+        st.subheader("🌐 수집된 원본 이미지셋")
         conn = sqlite3.connect('pet_analysis.db')
         df_collected = pd.read_sql_query("SELECT * FROM collected_images ORDER BY id DESC", conn)
         conn.close()
         
         if not df_collected.empty:
-            # 견종별로 필터링해서 볼 수 있게 필터 추가
             filter_breed = st.selectbox("견종 필터", ["전체"] + list(df_collected['breed'].unique()))
             display_df = df_collected if filter_breed == "전체" else df_collected[df_collected['breed'] == filter_breed]
-            
             st.dataframe(display_df, use_container_width=True)
             
-            # 필요할 때 이미지 불러와서 확인하기 (갤러리 형태)
-            if st.checkbox("이미지 미리보기 활성화"):
+            if st.checkbox("이미지 갤러리 보기"):
                 cols = st.columns(3)
-                for idx, row in display_df.head(12).iterrows(): # 너무 많으면 느려지니 12개만
+                for idx, row in display_df.head(12).iterrows():
                     with cols[idx % 3]:
                         if os.path.exists(row['img_path']):
-                            st.image(row['img_path'], caption=f"{row['breed']} ({row['id']})")
+                            st.image(row['img_path'], caption=f"{row['breed']} (ID:{row['id']})")
         else:
-            st.write("아직 수집된 데이터가 없습니다.")
+            st.write("수집된 데이터가 없습니다. Step 1에서 수집을 먼저 진행해 주세요.")
 
 # 하단 푸터
 st.divider()
