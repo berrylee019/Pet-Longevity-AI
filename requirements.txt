@@ -4,3 +4,4 @@ torch
 torchvision
 google-generativeai
 Pillow
+fpdf
