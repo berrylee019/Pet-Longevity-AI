@@ -35,17 +35,27 @@ class PetReportPDF(FPDF):
 
 def create_pdf_report(breed, bcs, pace, reason):
     pdf = PetReportPDF()
-    # 폰트 등록 (NanumGothicBold.ttf 파일이 같은 폴더에 있어야 함)
-    pdf.add_font('NanumGothic', '', 'NanumGothicBold.ttf', uni=True)
+    
+    # 1. 폰트 등록을 가장 먼저 합니다! (add_page보다 먼저)
+    # 스타일 'B'(Bold)로 쓸 수 있도록 스타일을 명시해줍니다.
+    font_path = "NanumGothicBold.ttf"
+    if not os.path.exists(font_path):
+        st.error(f"⚠️ {font_path} 파일이 없습니다. 경로를 확인해주세요.")
+        return None
+        
+    # 'NanumGothic'이라는 이름으로 'B'(Bold) 스타일을 등록
+    pdf.add_font('NanumGothic', 'B', font_path, uni=True)
+    
+    # 2. 이제 페이지를 추가합니다. (이때 자동으로 header()가 호출됩니다)
     pdf.add_page()
     
-    # 테두리 및 디자인
+    # 3. 본문 작성 시작
     pdf.set_draw_color(0, 51, 102)
     pdf.set_line_width(1)
     pdf.rect(10, 10, 190, 277)
     
-    # 상세 내용
-    pdf.set_font('NanumGothic', '', 14)
+    # 본문용 폰트 설정 (위에서 'B'로 등록했으니 'B'를 사용)
+    pdf.set_font('NanumGothic', 'B', 14)
     pdf.set_text_color(50, 50, 50)
     
     data = [
@@ -61,16 +71,16 @@ def create_pdf_report(breed, bcs, pace, reason):
         pdf.cell(130, 12, row[1], border=1, ln=True)
     
     pdf.ln(10)
-    pdf.set_font('NanumGothic', '', 16)
+    pdf.set_font('NanumGothic', 'B', 16)
     pdf.cell(0, 10, '[ AI 수의사 종합 소견 ]', ln=True)
     
-    pdf.set_font('NanumGothic', '', 12)
+    pdf.set_font('NanumGothic', 'B', 12)
     pdf.multi_cell(0, 10, reason, border=0)
     
     pdf.ln(20)
-    pdf.set_font('NanumGothic', '', 10)
+    pdf.set_font('NanumGothic', 'B', 10)
     pdf.set_text_color(150, 150, 150)
-    pdf.cell(0, 10, '제작: [견종별 노화 정밀 분석기] | 본 진단은 AI 분석 결과로 참고용으로 활용하세요.', align='C')
+    pdf.cell(0, 10, '제작: [견종별 노화 정밀 분석기] | 본 진단은 AI 분석 결과로 참고용입니다.', align='C')
     
     report_path = f"reports/Report_{breed}_{datetime.datetime.now().strftime('%Y%m%d%H%M')}.pdf"
     pdf.output(report_path)
