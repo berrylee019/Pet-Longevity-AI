@@ -9,7 +9,7 @@ from PIL import Image
 from fpdf import FPDF
 from icrawler.builtin import BingImageCrawler, GoogleImageCrawler, BaiduImageCrawler
 
-# --- Timezone Logic (Kept KST for Developer, labeled as KST) ---
+# --- Timezone Logic (Kept KST for consistency in logs) ---
 def get_kst_now():
     kst = datetime.timezone(datetime.timedelta(hours=9))
     return datetime.datetime.now(kst)
@@ -31,10 +31,10 @@ def init_system():
 
 init_system()
 
-# --- 2. PDF Report Logic (English + 1-Page Constraint) ---
+# --- 2. PDF Report Logic (Global/English) ---
 class PetReportPDF(FPDF):
     def header(self):
-        header_img = "card_bg_en.png"
+        header_img = "card_bg1.png" # Updated English version image
         if os.path.exists(header_img):
             self.image(header_img, x=10, y=10, w=190)
             self.ln(32)
@@ -46,25 +46,22 @@ class PetReportPDF(FPDF):
 def create_pdf_report(breed, bcs, pace, reason):
     try:
         pdf = PetReportPDF()
-        pdf.set_auto_page_break(auto=False, margin=0) # Absolute 1-page
-        
-        # Using standard fonts for global compatibility (Arial)
+        pdf.set_auto_page_break(auto=False, margin=0) 
         pdf.add_page()
         
         pdf.set_font('Arial', 'B', 18)
-        pdf.cell(0, 10, '', ln=True, align='C')
+        pdf.cell(0, 10, 'Anti-Aging & Body Condition Report', ln=True, align='C')
         pdf.ln(5)
         
         kst_time = get_kst_now().strftime('%Y-%m-%d %H:%M')
         table_width = 160
         start_x = (210 - table_width) / 2
         
-        # English Labels
         data = [
-            ['Breed', f'{breed}'], 
+            ['Selected Breed', f'{breed}'], 
             ['Body Condition Score (BCS)', f'{bcs} / 9 pts'], 
-            ['Aging Pace Factor', f'{pace}x Speed'], 
-            ['Diagnostic Date (KST)', f'{kst_time}']
+            ['Estimated Aging Pace', f'{pace}x Speed'], 
+            ['Report Date (KST)', f'{kst_time}']
         ]
         
         pdf.set_font('Arial', 'B', 10)
@@ -82,7 +79,6 @@ def create_pdf_report(breed, bcs, pace, reason):
         pdf.ln(2)
         
         clean_reason = reason.replace('**', '').replace('*', '').strip()
-        # Dynamic font sizing to keep it on one page
         font_size = 8 if len(clean_reason) > 600 else 9 if len(clean_reason) > 400 else 10
             
         pdf.set_font('Arial', '', font_size)
@@ -90,7 +86,6 @@ def create_pdf_report(breed, bcs, pace, reason):
         pdf.set_x(start_x)
         pdf.multi_cell(table_width, 5.5, clean_reason, border=0, align='L')
         
-        # Business Footer
         pdf.set_y(260)
         pdf.set_font('Arial', 'B', 11)
         pdf.set_text_color(200, 0, 0)
@@ -98,7 +93,7 @@ def create_pdf_report(breed, bcs, pace, reason):
         
         pdf.set_font('Arial', 'I', 8)
         pdf.set_text_color(160, 160, 160)
-        pdf.cell(0, 5, 'Powered by: [Pet Longevity AI] | This is an AI-generated simulation report.', align='C', ln=True)
+        pdf.cell(0, 5, 'Powered by: [Pet Longevity AI] | AI Simulation Results', align='C', ln=True)
         
         report_path = f"reports/Report_{breed}_{get_kst_now().strftime('%Y%m%d%H%M')}.pdf"
         pdf.output(report_path)
@@ -106,13 +101,12 @@ def create_pdf_report(breed, bcs, pace, reason):
     except Exception as e:
         return None
 
-# --- 3. AI Analysis Prompt (Updated for English Output) ---
+# --- 3. AI Analysis Function ---
 def analyze_pet_multi_view(side_img_path, top_img_path, breed_name):
     try:
         side_img = Image.open(side_img_path)
         top_img = Image.open(top_img_path)
-        # Prompts AI to respond in English
-        prompt = f"As a professional veterinarian, analyze these photos of a {breed_name}. Provide the 'BCS Score / Clinical Opinion' in English. Avoid special characters."
+        prompt = f"As a professional veterinarian, analyze these photos of a {breed_name}. Provide 'Score / Clinical Opinion' in English. No special characters."
         response = model.generate_content([prompt, side_img, top_img])
         res_text = response.text.strip()
         
@@ -129,7 +123,6 @@ def analyze_pet_multi_view(side_img_path, top_img_path, breed_name):
 
 def calculate_pace_of_aging(bcs, breed):
     pace = 1.0 + (abs(5-bcs) * 0.15)
-    # Specific logic for Large breeds
     if breed in ["Retriever", "German Shepherd"]: pace *= 1.15
     return round(pace, 2)
 
@@ -140,26 +133,25 @@ if "GEMINI_API_KEY" in st.secrets:
     genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
     model = genai.GenerativeModel('gemini-2.5-flash')
 
-st.sidebar.title("🐾 System Settings")
-selected_breed = st.sidebar.selectbox("Select Breed", ["Retriever", "Maltese", "Poodle", "Pomeranian", "Etc"])
+st.sidebar.title("🐾 System Config")
+selected_breed = st.sidebar.selectbox("Target Breed", ["Retriever", "Maltese", "Poodle", "Pomeranian", "Others"])
 st.sidebar.divider()
 admin_pass = st.sidebar.text_input("Admin Password", type="password")
 is_admin = (admin_pass == "2004")
 
-tabs = st.tabs(["🔍 AI Diagnosis"] + (["🌐 Data Collection", "📊 Data Center"] if is_admin else []))
+tabs = st.tabs(["🔍 AI Diagnosis"] + (["🌐 Global Data Collection", "📊 Admin Data Center"] if is_admin else []))
 
 with tabs[0]:
-    st.header("🐶 AI Veterinarian: Longevity Diagnosis")
+    st.header("🐶 AI Veterinarian: Precision Aging Diagnosis")
     
-    # --- Instructions Guide (English) ---
-    with st.expander("💡 How to Use & Request Diagnosis (Read First)", expanded=True):
+    with st.expander("💡 How to Request Analysis (Guide)", expanded=True):
         st.markdown("""
-        1.  **Select Breed:** Choose your dog's breed from the **sidebar on the left**.
-        2.  **Upload Images:** Upload clear photos of your dog's **Side View** and **Top View** below.
-        3.  **Run Analysis:** Click the **'🧠 Run AI Analysis & Create Report'** button.
-        4.  **Check Opinion:** Wait about 10 seconds for the **AI Veterinarian's clinical opinion**.
-        5.  **Download Report:** Click **'📄 Download PDF Report'** to save or print the results.
-        6.  **In-depth Analysis:** For a more detailed premium consultation, contact us via **email** below.
+        1.  **Select Breed:** Use the **sidebar on the left** to pick your dog's breed.
+        2.  **Upload Images:** Upload clear photos of your dog's **Side** and **Top** views.
+        3.  **Run AI:** Click the **'🧠 Run AI Analysis'** button.
+        4.  **Review:** After 10s, read the **Veterinarian's Clinical Opinion**.
+        5.  **Save PDF:** Download your professional **PDF Health Report**.
+        6.  **Premium:** For deeper insights, email us at the address below.
         """)
     
     st.divider()
@@ -174,16 +166,15 @@ with tabs[0]:
             s_p, t_p = f"database_images/{t_stamp}_s.png", f"database_images/{t_stamp}_t.png"
             with open(s_p, "wb") as f: f.write(side_f.getbuffer())
             with open(t_p, "wb") as f: f.write(top_f.getbuffer())
-            with st.spinner("AI Veterinarian is analyzing. Please wait..."):
+            with st.spinner("AI Veterinarian is analyzing images..."):
                 res = analyze_pet_multi_view(s_p, t_p, selected_breed)
                 pace = calculate_pace_of_aging(res["bcs"], selected_breed)
                 
                 st.success("✅ Analysis Complete!")
-                st.info(f"**[AI Veterinarian's Opinion]**\n\n{res['reason']}")
+                st.info(f"**[AI Clinical Opinion]**\n\n{res['reason']}")
                 
                 pdf_p = create_pdf_report(selected_breed, res["bcs"], pace, res["reason"])
                 
-                # DB logging
                 conn = sqlite3.connect('pet_analysis.db')
                 conn.cursor().execute("INSERT INTO analysis_logs (breed, bcs, pace, reason, date) VALUES (?,?,?,?,?)",
                                      (selected_breed, res["bcs"], pace, res["reason"], get_kst_now().strftime('%Y-%m-%d %H:%M')))
@@ -192,24 +183,65 @@ with tabs[0]:
 
                 if pdf_p:
                     with open(pdf_p, "rb") as f:
-                        st.download_button("📄 Download PDF Report (Save & Print)", f, file_name=f"Report_{selected_breed}.pdf", use_container_width=True)
-        else: st.warning("Please upload both Side and Top view photos.")
+                        st.download_button("📄 Download PDF Report", f, file_name=f"Report_{selected_breed}.pdf", use_container_width=True)
+        else: st.warning("Please upload both Side and Top view images.")
 
-# --- Admin Tabs (Logic remains same, labels translated) ---
+# --- 5. Updated Data Collection Tab (Global Edition) ---
 if is_admin:
     with tabs[1]:
-        st.header("🌐 Data Collection (Global Search)")
-        query = st.text_input("Search Query", f"{selected_breed} dog full body photo side view -chart -diagram")
-        sources = st.multiselect("Sources", ["Google", "Bing", "Baidu"], default=["Google", "Bing"])
-        max_imgs = st.slider("Quantity", 5, 50, 15)
+        st.header("🌐 Global Data Collection (Status Tracked)")
+        query = st.text_input("Search Query", f"{selected_breed} dog full body side view")
+        sources = st.multiselect("Search Engines (Bing Recommended)", ["Google", "Bing", "Baidu"], default=["Bing"])
+        max_imgs = st.slider("Max Images per Engine", 5, 50, 10)
+        
         if st.button("🚀 Start Collection"):
-            # (Image collection logic same as original)
-            st.info("Collecting data...")
-            # ... (omitted for brevity, same as Korean version)
+            save_base = f"dataset/multi_view/{selected_breed}"
+            if not os.path.exists(save_base): os.makedirs(save_base)
+            
+            status_log = st.empty() # Real-time status update
+            progress_bar = st.progress(0)
+            
+            conn = sqlite3.connect('pet_analysis.db')
+            for idx, src in enumerate(sources):
+                status_log.write(f"📡 Attempting to connect to **{src}**...")
+                src_dir = os.path.join(save_base, src.lower())
+                if not os.path.exists(src_dir): os.makedirs(src_dir)
+                
+                try:
+                    search_kw = query if src != "Baidu" else f"{selected_breed} 狗狗 侧面 真实照片"
+                    
+                    if src == "Google": crawler = GoogleImageCrawler(storage={'root_dir': src_dir})
+                    elif src == "Bing": crawler = BingImageCrawler(storage={'root_dir': src_dir})
+                    else: crawler = BaiduImageCrawler(storage={'root_dir': src_dir})
+                    
+                    status_log.write(f"📥 Downloading images from **{src}**... (Up to {max_imgs} files)")
+                    crawler.crawl(keyword=search_kw, max_num=max_imgs)
+                    
+                    # Update DB
+                    for f_name in os.listdir(src_dir):
+                        f_path = os.path.join(src_dir, f_name)
+                        if not conn.cursor().execute("SELECT id FROM collected_images WHERE img_path=?", (f_path,)).fetchone():
+                            conn.cursor().execute("INSERT INTO collected_images (breed, img_path, source, collect_date) VALUES (?,?,?,?)", 
+                                                 (selected_breed, f_path, src, get_kst_now().strftime('%Y-%m-%d %H:%M')))
+                    status_log.write(f"✅ **{src}** collection finished successfully!")
+                    
+                except Exception as e:
+                    st.error(f"❌ Error with {src}: {str(e)}")
+                    status_log.write(f"⚠️ Skipping {src} and moving to next...")
+                
+                progress_bar.progress((idx + 1) / len(sources))
+            
+            conn.commit()
+            conn.close()
+            status_log.write("🏁 **All collection processes completed.**")
+            st.success("Check the Data Center for results!")
 
     with tabs[2]:
         st.header("📊 Admin Data Center")
-        # (Data management logic same as original)
+        # (Log viewing and cleaning logic same as original, labels in English)
+        conn = sqlite3.connect('pet_analysis.db')
+        st.dataframe(pd.read_sql_query("SELECT * FROM analysis_logs ORDER BY id DESC", conn), use_container_width=True)
+        conn.close()
 
 st.divider()
-st.caption("Business Partnership & Pilot Program: bslee@yahoo.com")
+st.caption("Partnerships & Media Inquiry: bslee@yahoo.com")
