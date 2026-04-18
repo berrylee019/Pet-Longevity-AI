@@ -7,7 +7,7 @@ import re
 import pandas as pd
 from PIL import Image
 from fpdf import FPDF
-from icrawler.builtin import BingImageCrawler, GoogleImageCrawler, FlickrImageCrawler
+from icrawler.builtin import BingImageCrawler, GoogleImageCrawler, BaiduImageCrawler
 
 # --- 1. 시스템 초기화 ---
 def init_system():
@@ -26,7 +26,7 @@ def init_system():
 
 init_system()
 
-# --- 2. PDF 생성 로직 (상단 로고 포함) ---
+# --- 2. PDF 생성 로직 (상단 로고 및 레이아웃 최적화) ---
 class PetReportPDF(FPDF):
     def header(self):
         header_img = "card_bg1.png"
@@ -45,33 +45,40 @@ def create_pdf_report(breed, bcs, pace, reason):
         if not os.path.exists(font_path): return None
         pdf.add_font('NanumGothic', 'B', font_path, uni=True)
         pdf.add_page()
+        
         pdf.set_font('NanumGothic', 'B', 22)
         pdf.cell(0, 15, 'Anti-Aging & Body Condition Report', ln=True, align='C')
         pdf.ln(10)
+        
         table_width = 160
         start_x = (210 - table_width) / 2
         data = [['진단 대상 견종', f'{breed}'], ['체형 점수 (BCS)', f'{bcs} / 9 점'], 
                 ['예상 노화 속도', f'{pace} 배속'], ['진단 일시', datetime.datetime.now().strftime('%Y-%m-%d %H:%M')]]
+        
         for row in data:
             pdf.set_x(start_x)
             pdf.set_fill_color(245, 245, 245)
             pdf.cell(60, 12, row[0], border=1, fill=True)
             pdf.cell(100, 12, row[1], border=1, ln=True, align='C')
+            
         pdf.ln(20)
         pdf.set_x(start_x)
         pdf.set_font('NanumGothic', 'B', 16)
         pdf.set_text_color(0, 51, 102)
         pdf.cell(0, 10, '[ AI 수의사 종합 소견 ]', ln=True)
         pdf.ln(5)
+        
         clean_reason = reason.replace('**', '').replace('*', '').strip()
         pdf.set_font('NanumGothic', 'B', 12)
         pdf.set_text_color(60, 60, 60)
         pdf.set_x(start_x)
         pdf.multi_cell(table_width, 10, clean_reason, border=0, align='L')
+        
         pdf.set_y(265)
         pdf.set_font('NanumGothic', 'B', 10)
         pdf.set_text_color(160, 160, 160)
         pdf.cell(0, 10, '제작: [견종별 노화 정밀 분석기] | 다이어트 체험단 모집 중', align='C')
+        
         report_path = f"reports/Report_{breed}_{datetime.datetime.now().strftime('%Y%m%d%H%M')}.pdf"
         pdf.output(report_path)
         return report_path
@@ -85,10 +92,17 @@ def analyze_pet_multi_view(side_img_path, top_img_path, breed_name):
         prompt = f"수의사로서 {breed_name} 사진 분석. '점수 / 소견' 형식(특수문자 제외)으로 작성."
         response = model.generate_content([prompt, side_img, top_img])
         res_text = response.text.strip()
-        bcs_val = int(re.findall(r'[1-9]', res_text)[0]) if re.findall(r'[1-9]', res_text) else 5
-        clean_reason = res_text.split('/')[-1].strip() if '/' in res_text else res_text
+        
+        if '/' in res_text:
+            parts = res_text.split('/')
+            bcs_val = int(re.search(r'\d', parts[0]).group()) if re.search(r'\d', parts[0]) else 5
+            clean_reason = parts[1].strip()
+        else:
+            bcs_val = 5
+            clean_reason = res_text
+            
         return {"bcs": bcs_val, "reason": clean_reason}
-    except: return {"bcs": 5, "reason": "이미지 분석 오류."}
+    except: return {"bcs": 5, "reason": "AI 분석 중 오류가 발생했습니다."}
 
 def calculate_pace_of_aging(bcs, breed):
     pace = 1.0 + (abs(5-bcs) * 0.15)
@@ -116,8 +130,8 @@ tabs = st.tabs(tab_list)
 with tabs[0]:
     st.header("🐶 AI 수의사 노화 정밀 진단")
     c1, c2 = st.columns(2)
-    with c1: side_f = st.file_uploader("옆모습 업로드", type=['jpg', 'jpeg', 'png'])
-    with c2: top_f = st.file_uploader("윗모습 업로드", type=['jpg', 'jpeg', 'png'])
+    with c1: side_f = st.file_uploader("옆모습 업로드", type=['jpg', 'jpeg', 'png'], key="side_f")
+    with c2: top_f = st.file_uploader("윗모습 업로드", type=['jpg', 'jpeg', 'png'], key="top_f")
     
     if st.button("🧠 분석 실행 및 리포트 생성", use_container_width=True):
         if side_f and top_f:
@@ -125,20 +139,24 @@ with tabs[0]:
             s_p, t_p = f"database_images/{t_stamp}_s.png", f"database_images/{t_stamp}_t.png"
             with open(s_p, "wb") as f: f.write(side_f.getbuffer())
             with open(t_p, "wb") as f: f.write(top_f.getbuffer())
-            res = analyze_pet_multi_view(s_p, t_p, selected_breed)
-            pace = calculate_pace_of_aging(res["bcs"], selected_breed)
-            st.info(f"**AI 소견:** {res['reason']}")
-            pdf_p = create_pdf_report(selected_breed, res["bcs"], pace, res["reason"])
-            if pdf_p:
-                with open(pdf_p, "rb") as f:
-                    st.download_button("📄 PDF 진단서 다운로드", f, file_name=f"Report_{selected_breed}.pdf", use_container_width=True)
+            
+            with st.spinner("AI 분석 중..."):
+                res = analyze_pet_multi_view(s_p, t_p, selected_breed)
+                pace = calculate_pace_of_aging(res["bcs"], selected_breed)
+                st.info(f"**AI 소견:** {res['reason']}")
+                pdf_p = create_pdf_report(selected_breed, res["bcs"], pace, res["reason"])
+                if pdf_p:
+                    with open(pdf_p, "rb") as f:
+                        st.download_button("📄 PDF 진단서 다운로드", f, file_name=f"Report_{selected_breed}.pdf", use_container_width=True)
+        else:
+            st.warning("사진 2장을 모두 업로드해주세요.")
 
-# [Tab 1] 멀티 소스 수집 (Google, Bing, Flickr 통합)
+# [Tab 1] 멀티 소스 수집 (Flickr 대신 Baidu 적용)
 if is_admin:
     with tabs[1]:
-        st.header("🌐 멀티 소스 데이터 수집")
+        st.header("🌐 멀티 소스 데이터 수집 (Admin)")
         query = st.text_input("검색 쿼리", f"{selected_breed} dog body condition score -text")
-        sources = st.multiselect("수집 출처 선택", ["Google", "Bing", "Flickr"], default=["Google", "Bing"])
+        sources = st.multiselect("수집 출처 선택", ["Google", "Bing", "Baidu"], default=["Google", "Bing", "Baidu"])
         max_imgs = st.slider("소스당 수집 개수", 5, 50, 10)
         
         if st.button("🚀 통합 수집 시작"):
@@ -149,34 +167,33 @@ if is_admin:
                 src_dir = os.path.join(save_base, src.lower())
                 if not os.path.exists(src_dir): os.makedirs(src_dir)
                 
-                with st.spinner(f"{src}에서 수집 중..."):
+                with st.spinner(f"{src} 소스에서 데이터를 수집하는 중..."):
                     try:
                         if src == "Google":
                             crawler = GoogleImageCrawler(storage={'root_dir': src_dir})
                         elif src == "Bing":
                             crawler = BingImageCrawler(storage={'root_dir': src_dir})
-                        elif src == "Flickr":
-                            # Flickr는 API 키가 필요한 경우가 많지만, icrawler 기본 제공 기능을 우선 시도합니다.
-                            crawler = FlickrImageCrawler(storage={'root_dir': src_dir})
+                        elif src == "Baidu":
+                            crawler = BaiduImageCrawler(storage={'root_dir': src_dir})
                         
                         crawler.crawl(keyword=query, max_num=max_imgs)
                         
-                        # DB 등록
+                        # 파일 DB 등록
                         for f_name in os.listdir(src_dir):
                             f_path = os.path.join(src_dir, f_name)
                             conn.cursor().execute("INSERT INTO collected_images (breed, img_path, source, collect_date) VALUES (?,?,?,?)",
                                                  (selected_breed, f_path, src, datetime.datetime.now().strftime('%Y-%m-%d %H:%M')))
                     except Exception as e:
-                        st.error(f"{src} 수집 중 오류: {e}")
+                        st.error(f"{src} 수집 실패: {e}")
             
             conn.commit()
             conn.close()
-            st.success("모든 소스에서 수집을 완료했습니다!")
+            st.success("통합 수집이 완료되었습니다!")
 
     # [Tab 2] 데이터 센터
     with tabs[2]:
-        st.header("📊 데이터 센터 (Admin)")
-        l_tab, c_tab = st.tabs(["📋 로그", "🖼️ 이미지 정화"])
+        st.header("📊 데이터 관리 센터 (Admin Only)")
+        l_tab, c_tab = st.tabs(["📋 분석 로그", "🖼️ 수집 이미지 정화"])
         with l_tab:
             conn = sqlite3.connect('pet_analysis.db')
             st.dataframe(pd.read_sql_query("SELECT * FROM analysis_logs ORDER BY id DESC", conn), use_container_width=True)
@@ -185,8 +202,8 @@ if is_admin:
             conn = sqlite3.connect('pet_analysis.db')
             df_c = pd.read_sql_query("SELECT * FROM collected_images ORDER BY id DESC", conn)
             if not df_c.empty:
-                to_del = st.multiselect("삭제 ID", df_c['id'].tolist())
-                if st.button("🗑️ 삭제"):
+                to_del = st.multiselect("삭제할 이미지 ID 선택", df_c['id'].tolist())
+                if st.button("🗑️ 선택 삭제 실행", type="primary"):
                     cur = conn.cursor()
                     for d_id in to_del:
                         cur.execute("SELECT img_path FROM collected_images WHERE id = ?", (d_id,))
@@ -195,6 +212,7 @@ if is_admin:
                         cur.execute("DELETE FROM collected_images WHERE id = ?", (d_id,))
                     conn.commit()
                     st.rerun()
+                st.divider()
                 cols = st.columns(4)
                 for i, row in df_c.iterrows():
                     with cols[i % 4]:
