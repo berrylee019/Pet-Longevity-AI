@@ -163,11 +163,9 @@ with tabs[0]:
 if is_admin:
     with tabs[1]:
         st.header("🌐 고품질 데이터 수집 (Filter 강화)")
-        refined_query = f"{selected_breed} dog full body photo side view -chart -diagram -text -table -infographic"
-        query = st.text_input("최적화 쿼리", refined_query)
+        query = st.text_input("최적화 쿼리", f"{selected_breed} dog full body photo side view -chart -diagram -text -table -infographic")
         sources = st.multiselect("출처", ["Google", "Bing", "Baidu"], default=["Google", "Bing", "Baidu"])
         max_imgs = st.slider("수량", 5, 50, 15)
-        
         if st.button("🚀 필터링 수집 시작"):
             save_base = f"dataset/multi_view/{selected_breed}"
             conn = sqlite3.connect('pet_analysis.db')
@@ -176,15 +174,12 @@ if is_admin:
                 if not os.path.exists(src_dir): os.makedirs(src_dir)
                 try:
                     search_keyword = query if src != "Baidu" else f"{selected_breed} 狗狗 侧面 真实照片 -图表 -文字"
-                    crawler = GoogleImageCrawler(storage={'root_dir': src_dir}) if src == "Google" else \
-                              BingImageCrawler(storage={'root_dir': src_dir}) if src == "Bing" else \
-                              BaiduImageCrawler(storage={'root_dir': src_dir})
+                    crawler = GoogleImageCrawler(storage={'root_dir': src_dir}) if src == "Google" else BingImageCrawler(storage={'root_dir': src_dir}) if src == "Bing" else BaiduImageCrawler(storage={'root_dir': src_dir})
                     crawler.crawl(keyword=search_keyword, max_num=max_imgs)
                     for f_name in os.listdir(src_dir):
                         f_path = os.path.join(src_dir, f_name)
                         if not conn.cursor().execute("SELECT id FROM collected_images WHERE img_path=?", (f_path,)).fetchone():
-                            conn.cursor().execute("INSERT INTO collected_images (breed, img_path, source, collect_date) VALUES (?,?,?,?)",
-                                                 (selected_breed, f_path, src, datetime.datetime.now().strftime('%Y-%m-%d %H:%M')))
+                            conn.cursor().execute("INSERT INTO collected_images (breed, img_path, source, collect_date) VALUES (?,?,?,?)", (selected_breed, f_path, src, datetime.datetime.now().strftime('%Y-%m-%d %H:%M')))
                 except Exception as e: st.error(f"{src} 에러: {e}")
             conn.commit()
             conn.close()
