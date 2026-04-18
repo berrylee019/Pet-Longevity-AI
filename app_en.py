@@ -138,7 +138,7 @@ st.set_page_config(page_title="Pet Longevity AI", layout="wide")
 
 if "GEMINI_API_KEY" in st.secrets:
     genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-    model = genai.GenerativeModel('gemini-1.5-flash')
+    model = genai.GenerativeModel('gemini-2.5-flash')
 
 st.sidebar.title("🐾 System Settings")
 selected_breed = st.sidebar.selectbox("Select Breed", ["Retriever", "Maltese", "Poodle", "Pomeranian", "Etc"])
