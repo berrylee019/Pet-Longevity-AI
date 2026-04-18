@@ -137,7 +137,7 @@ st.set_page_config(page_title="Pet Longevity AI", layout="wide")
 
 if "GEMINI_API_KEY" in st.secrets:
     genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-    model = genai.GenerativeModel('gemini-1.5-flash')
+    model = genai.GenerativeModel('gemini-2.5-flash')
 
 selected_breed = st.sidebar.selectbox("대상 견종 선택", ["리트리버", "말티즈", "푸들", "포메라니안"])
 tab1, tab2, tab3 = st.tabs(["🔍 정밀 분석 및 PDF 발급", "🌐 이미지 수집", "📊 데이터 센터"])
