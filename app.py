@@ -98,7 +98,8 @@ def analyze_pet_multi_view(side_img_path, top_img_path, breed_name):
             bcs_val = int(re.search(r'\d', parts[0]).group()) if re.search(r'\d', parts[0]) else 5
             clean_reason = parts[1].strip()
         else:
-            bcs_val = 5
+            bcs_match = re.search(r'\d', res_text)
+            bcs_val = int(bcs_match.group()) if bcs_match else 5
             clean_reason = res_text
             
         return {"bcs": bcs_val, "reason": clean_reason}
@@ -123,7 +124,7 @@ admin_pass = st.sidebar.text_input("관리자 비번", type="password")
 is_admin = (admin_pass == "2004")
 
 tab_list = ["🔍 정밀 분석 및 PDF"]
-if is_admin: tab_list += ["🌐 멀티 소스 수집", "📊 데이터 센터"]
+if is_admin: tab_list += ["🌐 고품질 이미지 수집", "📊 데이터 센터"]
 tabs = st.tabs(tab_list)
 
 # [Tab 0] 분석 및 발급
@@ -151,15 +152,20 @@ with tabs[0]:
         else:
             st.warning("사진 2장을 모두 업로드해주세요.")
 
-# [Tab 1] 멀티 소스 수집 (Flickr 대신 Baidu 적용)
+# [Tab 1] 고품질 멀티 소스 수집 (강화 버전)
 if is_admin:
     with tabs[1]:
-        st.header("🌐 멀티 소스 데이터 수집 (Admin)")
-        query = st.text_input("검색 쿼리", f"{selected_breed} dog body condition score -text")
-        sources = st.multiselect("수집 출처 선택", ["Google", "Bing", "Baidu"], default=["Google", "Bing", "Baidu"])
-        max_imgs = st.slider("소스당 수집 개수", 5, 50, 10)
+        st.header("🌐 고품질 데이터 수집 (Filter 강화)")
+        st.info("💡 실제 사진 위주로 수집하기 위해 도표/텍스트 필터가 자동 적용됩니다.")
         
-        if st.button("🚀 통합 수집 시작"):
+        # 최적화된 필터 쿼리 자동 생성
+        refined_query = f"{selected_breed} dog full body photo side view -chart -diagram -text -table -infographic"
+        query = st.text_input("수정된 검색 쿼리", refined_query)
+        
+        sources = st.multiselect("수집 출처 선택", ["Google", "Bing", "Baidu"], default=["Google", "Bing", "Baidu"])
+        max_imgs = st.slider("소스당 수집 개수", 5, 50, 15)
+        
+        if st.button("🚀 필터링 수집 시작"):
             save_base = f"dataset/multi_view/{selected_breed}"
             conn = sqlite3.connect('pet_analysis.db')
             
@@ -167,8 +173,13 @@ if is_admin:
                 src_dir = os.path.join(save_base, src.lower())
                 if not os.path.exists(src_dir): os.makedirs(src_dir)
                 
-                with st.spinner(f"{src} 소스에서 데이터를 수집하는 중..."):
+                with st.spinner(f"{src} 소스에서 고품질 이미지 필터링 수집 중..."):
                     try:
+                        # 소스별 맞춤형 쿼리 튜닝
+                        search_keyword = query
+                        if src == "Baidu":
+                            search_keyword = f"{selected_breed} 狗狗 侧面 真实照片 -图表 -文字"
+                        
                         if src == "Google":
                             crawler = GoogleImageCrawler(storage={'root_dir': src_dir})
                         elif src == "Bing":
@@ -176,19 +187,21 @@ if is_admin:
                         elif src == "Baidu":
                             crawler = BaiduImageCrawler(storage={'root_dir': src_dir})
                         
-                        crawler.crawl(keyword=query, max_num=max_imgs)
+                        crawler.crawl(keyword=search_keyword, max_num=max_imgs)
                         
-                        # 파일 DB 등록
+                        # 파일 DB 등록 (중복 체크 포함)
                         for f_name in os.listdir(src_dir):
                             f_path = os.path.join(src_dir, f_name)
-                            conn.cursor().execute("INSERT INTO collected_images (breed, img_path, source, collect_date) VALUES (?,?,?,?)",
-                                                 (selected_breed, f_path, src, datetime.datetime.now().strftime('%Y-%m-%d %H:%M')))
+                            existing = conn.cursor().execute("SELECT id FROM collected_images WHERE img_path=?", (f_path,)).fetchone()
+                            if not existing:
+                                conn.cursor().execute("INSERT INTO collected_images (breed, img_path, source, collect_date) VALUES (?,?,?,?)",
+                                                     (selected_breed, f_path, src, datetime.datetime.now().strftime('%Y-%m-%d %H:%M')))
                     except Exception as e:
                         st.error(f"{src} 수집 실패: {e}")
             
             conn.commit()
             conn.close()
-            st.success("통합 수집이 완료되었습니다!")
+            st.success("고품질 수집이 완료되었습니다!")
 
     # [Tab 2] 데이터 센터
     with tabs[2]:
@@ -207,8 +220,8 @@ if is_admin:
                     cur = conn.cursor()
                     for d_id in to_del:
                         cur.execute("SELECT img_path FROM collected_images WHERE id = ?", (d_id,))
-                        p = cur.fetchone()[0]
-                        if os.path.exists(p): os.remove(p)
+                        row = cur.fetchone()
+                        if row and os.path.exists(row[0]): os.remove(row[0])
                         cur.execute("DELETE FROM collected_images WHERE id = ?", (d_id,))
                     conn.commit()
                     st.rerun()
