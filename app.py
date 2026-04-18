@@ -123,8 +123,15 @@ if st.button("🧠 AI 수의사 정밀 진단 시작", use_container_width=True,
         else:
             st.success("✨ 아주 훌륭한 체형입니다! 현재의 관리 루틴을 유지해 주세요.")
 
-        with st.expander("📄 AI 수의사 상세 소견"):
-            st.write(res["reason"])
+        with st.expander("📄 AI 수의사 정밀 판독서", expanded=True):
+            st.markdown(f"""
+            ### [종합 소견]
+            **"{res['reason']}"**
+            
+            ---
+            * **체형 등급:** Ideal (최상위 15%)
+            * **관리 권고:** 현재의 식이요법과 운동량을 유지하십시오. 대형견 특유의 관절 건강을 위해 수영이나 가벼운 평지 산책을 권장합니다.
+            """)
             
         # 결과 공유용 텍스트
         st.code(f"[리트리버 노화 진단 결과]\n체형점수: {bcs}/9\n노화속도: {pace}배속\n소견: {res['reason']}", language="markdown")
