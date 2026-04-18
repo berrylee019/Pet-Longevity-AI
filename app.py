@@ -195,8 +195,8 @@ with tab2:
         save_dir = f"dataset/multi_view/{selected_breed}"
         if not os.path.exists(save_dir): os.makedirs(save_dir)
         with st.spinner(f"Bing에서 {selected_breed} 이미지를 수집 중입니다..."):     
-        crawler = BingImageCrawler(storage={'root_dir': save_dir})
-        crawler.crawl(keyword=search_query, max_num=10)
+            crawler = BingImageCrawler(storage={'root_dir': save_dir})
+            crawler.crawl(keyword=search_query, max_num=10)
 
         # --- DB에 수집 정보 기록 (추가된 로직) ---
         conn = sqlite3.connect('pet_analysis.db')
