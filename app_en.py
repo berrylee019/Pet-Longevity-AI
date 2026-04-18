@@ -34,7 +34,7 @@ init_system()
 # --- 2. PDF Report Logic (English + 1-Page Constraint) ---
 class PetReportPDF(FPDF):
     def header(self):
-        header_img = "card_bg1.png"
+        header_img = "card_bg_en.png"
         if os.path.exists(header_img):
             self.image(header_img, x=10, y=10, w=190)
             self.ln(32)
@@ -52,7 +52,7 @@ def create_pdf_report(breed, bcs, pace, reason):
         pdf.add_page()
         
         pdf.set_font('Arial', 'B', 18)
-        pdf.cell(0, 10, 'Anti-Aging & Body Condition Report', ln=True, align='C')
+        pdf.cell(0, 10, '', ln=True, align='C')
         pdf.ln(5)
         
         kst_time = get_kst_now().strftime('%Y-%m-%d %H:%M')
