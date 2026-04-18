@@ -34,7 +34,7 @@ init_system()
 # --- 2. PDF Report Logic (Global/English) ---
 class PetReportPDF(FPDF):
     def header(self):
-        header_img = "card_bg1.png" # Updated English version image
+        header_img = "card_bg_en.png" # Updated English version image
         if os.path.exists(header_img):
             self.image(header_img, x=10, y=10, w=190)
             self.ln(32)
