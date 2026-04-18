@@ -228,7 +228,21 @@ with tab3:
                     cur.execute("DELETE FROM collected_images WHERE id = ?", (d_id,))
                 conn.commit()
                 st.rerun()
-            st.dataframe(df_c, use_container_width=True)
+                
+            st.divider()
+            
+            # 2. 이미지 갤러리 표시 (한 줄에 4개씩)
+            cols = st.columns(4)
+            for i, row in df_c.iterrows():
+                with cols[i % 4]:
+                    if os.path.exists(row['img_path']):
+                        st.image(row['img_path'], use_container_width=True)
+                        st.caption(f"ID: {row['id']} / {row['breed']}")
+                    else:
+                        st.warning(f"ID {row['id']}: 파일 없음")
+        else:
+            st.info("수집된 데이터가 없습니다.")
         conn.close()
+
 st.divider()
 st.caption("비즈니스 제휴 및 체험단 문의: bslee@yahoo.com")
