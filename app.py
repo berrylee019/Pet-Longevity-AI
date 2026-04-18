@@ -11,18 +11,15 @@ from icrawler.builtin import BingImageCrawler
 
 # --- 1. 시스템 초기화 및 DB 설정 ---
 def init_system():
-    # 저장용 폴더 생성
     for path in ["dataset/multi_view", "cards", "database_images"]:
         if not os.path.exists(path):
             os.makedirs(path)
     
     conn = sqlite3.connect('pet_analysis.db')
     c = conn.cursor()
-    # 분석 로그 테이블
     c.execute('''CREATE TABLE IF NOT EXISTS analysis_logs
                  (id INTEGER PRIMARY KEY AUTOINCREMENT, breed TEXT, side_img TEXT, top_img TEXT, 
                   bcs INTEGER, pace REAL, reason TEXT, date TEXT)''')
-    # 수집 이미지 관리 테이블
     c.execute('''CREATE TABLE IF NOT EXISTS collected_images
                  (id INTEGER PRIMARY KEY AUTOINCREMENT, breed TEXT, img_path TEXT, 
                   source TEXT, collect_date TEXT)''')
@@ -31,13 +28,38 @@ def init_system():
 
 init_system()
 
-# --- 2. 핵심 로직 함수들 ---
+# --- 2. 핵심 로직 함수 (디자인 및 요약 최적화 교체본) ---
 
-# 진단 카드 이미지 생성
+def analyze_pet_multi_view(side_img_path, top_img_path, breed_name):
+    """AI에게 핵심 요약 및 인사말 생략을 지시하는 최적화 함수"""
+    try:
+        side_img = Image.open(side_img_path)
+        top_img = Image.open(top_img_path)
+        
+        # 디자인을 위해 한글 150자 이내 요약을 강제합니다.
+        prompt = f"""
+        너는 베테랑 수의사야. {breed_name}의 옆모습과 윗모습 사진을 분석해줘.
+        1. BCS 점수 (1~9)를 결정해.
+        2. 소견을 작성할 때 '안녕하세요' 같은 인사말은 생략하고, 
+           갈비뼈 상태, 허리 라인, 복부 굴곡에 대한 핵심 진단만 한글 150자 이내로 짧고 명확하게 작성해줘.
+        결과 형식: 점수 / 소견
+        """
+        response = model.generate_content([prompt, side_img, top_img])
+        res_text = response.text.strip()
+        
+        # 점수와 소견 분리 추출
+        bcs_val = int(re.findall(r'[1-9]', res_text)[0]) if re.findall(r'[1-9]', res_text) else 5
+        clean_reason = res_text.split('/')[-1].strip() if '/' in res_text else res_text
+        
+        return {"bcs": bcs_val, "reason": clean_reason}
+    except Exception as e:
+        return {"bcs": 5, "reason": f"분석 중 오류 발생: {str(e)}"}
+
 def create_diagnosis_card(breed, bcs, pace, reason):
+    """가변 폰트 및 줄바꿈 최적화가 적용된 카드 생성 함수"""
     try:
         bg_path = "card_bg.png"
-        img = Image.open(bg_path) if os.path.exists(bg_path) else Image.new('RGB', (800, 1000), color=(255, 255, 255))
+        img = Image.open(bg_path) if os.path.exists(bg_path) else Image.new('RGB', (1000, 1300), color=(255, 255, 255))
         draw = ImageDraw.Draw(img)
         
         font_path = "NanumGothicBold.ttf"
@@ -45,21 +67,33 @@ def create_diagnosis_card(breed, bcs, pace, reason):
             st.error("⚠️ NanumGothicBold.ttf 파일이 필요합니다.")
             return None
 
-        font_title = ImageFont.truetype(font_path, 40)
-        font_data = ImageFont.truetype(font_path, 30)
-        font_reason = ImageFont.truetype(font_path, 20)
+        # 1. 상단 견종 텍스트
+        font_breed = ImageFont.truetype(font_path, 45)
+        draw.text((420, 45), breed, font=font_breed, fill=(255, 255, 255)) 
+
+        # 2. 중간 지표 (BCS, 노화 속도)
+        font_score = ImageFont.truetype(font_path, 100)
+        font_pace = ImageFont.truetype(font_path, 70)
+        draw.text((215, 470), str(bcs), font=font_score, fill=(30, 30, 30))
+        draw.text((615, 415), f"{pace}x", font=font_pace, fill=(210, 40, 40))
+
+        # 3. 하단 종합 소견 (글자 수에 따른 폰트 사이즈 가변 적용)
+        text_len = len(reason)
+        if text_len > 120: font_size = 18
+        elif text_len > 80: font_size = 22
+        else: font_size = 25
         
-        # 텍스트 배치 (디자인에 맞춰 조정)
-        draw.text((320, 50), f"{breed}", font=font_title, fill=(255, 255, 255))
-        draw.text((220, 480), f"{bcs}", font=ImageFont.truetype(font_path, 80), fill=(0, 0, 0))
-        draw.text((610, 420), f"{pace}x", font=ImageFont.truetype(font_path, 60), fill=(200, 50, 50))
+        font_reason = ImageFont.truetype(font_path, font_size)
         
-        # 소견 자동 줄바꿈
-        lines = textwrap.wrap(reason, width=40)
-        y_text = 680
+        # 줄바꿈 폭 최적화 (여백 확보)
+        wrap_width = 40 if font_size > 20 else 48
+        lines = textwrap.wrap(reason, width=wrap_width)
+        
+        y_text = 680 # 소견 시작 좌표
         for line in lines:
-            draw.text((80, y_text), line, font=font_reason, fill=(50, 50, 50))
-            y_text += 35
+            if y_text > 950: break # 카드 하단 범위를 넘어가면 중단
+            draw.text((80, y_text), line, font=font_reason, fill=(60, 60, 60))
+            y_text += (font_size + 12) # 행간 간격 적용
             
         card_path = f"cards/card_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
         img.save(card_path)
@@ -68,7 +102,7 @@ def create_diagnosis_card(breed, bcs, pace, reason):
         st.error(f"카드 생성 실패: {e}")
         return None
 
-# 노화 속도 계산
+# --- 기타 비즈니스 로직 ---
 def calculate_pace_of_aging(bcs_score, breed):
     base_pace = 1.0
     if bcs_score <= 3: pace = base_pace + (5 - bcs_score) * 0.12
@@ -77,23 +111,9 @@ def calculate_pace_of_aging(bcs_score, breed):
     if breed == "리트리버": pace *= 1.15
     return round(pace, 2)
 
-# AI 분석
-def analyze_pet_multi_view(side_img_path, top_img_path, breed_name):
-    try:
-        side_img = Image.open(side_img_path)
-        top_img = Image.open(top_img_path)
-        prompt = f"베테랑 수의사로서 {breed_name}의 옆/위 사진을 분석해 BCS 점수(1-9)와 근거를 '점수 / 근거' 형식으로 한글로 작성해줘."
-        response = model.generate_content([prompt, side_img, top_img])
-        res_text = response.text.strip()
-        bcs_val = int(re.findall(r'[1-9]', res_text)[0]) if re.findall(r'[1-9]', res_text) else 5
-        return {"bcs": bcs_val, "reason": res_text}
-    except:
-        return {"bcs": 5, "reason": "분석 실패. 표준 체형으로 가정합니다."}
-
-# --- 3. Streamlit UI ---
+# --- 3. UI 구성 (Streamlit) ---
 st.set_page_config(page_title="Pet Longevity AI", layout="wide")
 
-# API 설정
 if "GEMINI_API_KEY" in st.secrets:
     genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
     model = genai.GenerativeModel('gemini-2.5-flash')
@@ -101,44 +121,48 @@ if "GEMINI_API_KEY" in st.secrets:
 selected_breed = st.sidebar.selectbox("대상 견종 선택", ["리트리버", "말티즈", "푸들", "포메라니안"])
 tab1, tab2, tab3 = st.tabs(["🔍 정밀 분석 카드", "🌐 이미지 수집", "📊 데이터 센터"])
 
-# [Tab 1] 분석 및 카드 발급
+# [Tab 1] 분석 및 발급
 with tab1:
-    st.header("Step 2. AI 진단서 발급")
+    st.header("Step 2. AI 정밀 진단 카드 발급")
     col1, col2 = st.columns(2)
-    with col1: side_file = st.file_uploader("옆모습", type=['jpg', 'png'])
-    with col2: top_file = st.file_uploader("윗모습", type=['jpg', 'png'])
+    with col1: side_file = st.file_uploader("📸 옆모습 사진 (Side)", type=['jpg', 'jpeg', 'png'])
+    with col2: top_file = st.file_uploader("📸 윗모습 사진 (Top)", type=['jpg', 'jpeg', 'png'])
 
-    if st.button("🧠 진단 카드 생성", use_container_width=True):
+    if st.button("🧠 AI 수의사 정밀 진단 시작", use_container_width=True):
         if side_file and top_file:
             t_stamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
             s_path, t_path = f"database_images/{t_stamp}_s.png", f"database_images/{t_stamp}_t.png"
             with open(s_path, "wb") as f: f.write(side_file.getbuffer())
             with open(t_path, "wb") as f: f.write(top_file.getbuffer())
             
-            res = analyze_pet_multi_view(s_path, t_path, selected_breed)
-            pace = calculate_pace_of_aging(res["bcs"], selected_breed)
-            
-            conn = sqlite3.connect('pet_analysis.db')
-            conn.cursor().execute("INSERT INTO analysis_logs (breed, side_img, top_img, bcs, pace, reason, date) VALUES (?,?,?,?,?,?,?)",
-                                 (selected_breed, s_path, t_path, res["bcs"], pace, res["reason"], datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')))
-            conn.commit()
-            conn.close()
+            with st.spinner("AI가 체형을 대조 분석 중입니다..."):
+                res = analyze_pet_multi_view(s_path, t_path, selected_breed)
+                pace = calculate_pace_of_aging(res["bcs"], selected_breed)
+                
+                # DB 저장
+                conn = sqlite3.connect('pet_analysis.db')
+                conn.cursor().execute("INSERT INTO analysis_logs (breed, side_img, top_img, bcs, pace, reason, date) VALUES (?,?,?,?,?,?,?)",
+                                     (selected_breed, s_path, t_path, res["bcs"], pace, res["reason"], datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')))
+                conn.commit()
+                conn.close()
 
-            card = create_diagnosis_card(selected_breed, res["bcs"], pace, res["reason"])
-            if card:
-                st.image(card, width=600)
-                with open(card, "rb") as f:
-                    st.download_button("📥 카드 저장", f, file_name=f"report_{selected_breed}.png")
+                # 카드 이미지 생성
+                card = create_diagnosis_card(selected_breed, res["bcs"], pace, res["reason"])
+                if card:
+                    st.image(card, width=700)
+                    with open(card, "rb") as f:
+                        st.download_button("📥 진단 카드 다운로드 (SNS 공유용)", f, file_name=f"Report_{selected_breed}_{t_stamp}.png")
+        else:
+            st.warning("옆모습과 윗모습 사진을 모두 업로드해주세요.")
 
-# [Tab 2] 이미지 수집 (검색어 필터 강화)
+# [Tab 2] 이미지 수집
 with tab2:
-    st.header("Step 1. 견종 데이터 수집")
-    # 타 동물 제외 필터 추가
+    st.header("Step 1. 견종 데이터 수집 (Filter 적용)")
     refined_query = st.text_input("검색 쿼리 최적화", f"{selected_breed} dog real photo body condition -chart -diagram -infographic -poster -text")
-    if st.button("🚀 데이터 수집 및 DB 등록"):
+    if st.button("🚀 데이터 수집 시작"):
         save_dir = f"dataset/multi_view/{selected_breed}"
         if not os.path.exists(save_dir): os.makedirs(save_dir)
-        with st.spinner("이미지 수집 중..."):
+        with st.spinner("Bing에서 이미지 낚시 중..."):
             crawler = BingImageCrawler(storage={'root_dir': save_dir})
             crawler.crawl(keyword=refined_query, max_num=10)
         
@@ -152,34 +176,39 @@ with tab2:
                           (selected_breed, f_path, "Bing", datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')))
         conn.commit()
         conn.close()
-        st.success("데이터베이스 동기화 완료!")
+        st.success("수집된 데이터가 DB에 등록되었습니다.")
 
-# [Tab 3] 데이터 센터 (DB 정화 코드 포함)
+# [Tab 3] 데이터 센터 및 정화
 with tab3:
-    st.header("📊 데이터 관리 및 정화")
-    log_tab, coll_tab = st.tabs(["📋 분석 로그", "🖼️ 수집 라이브러리"])
+    st.header("📊 데이터 관리 센터")
+    l_tab, c_tab = st.tabs(["📋 분석 로그", "🖼️ 수집 라이브러리"])
     
-    with log_tab:
+    with l_tab:
         conn = sqlite3.connect('pet_analysis.db')
-        df_l = pd.read_sql_query("SELECT * FROM analysis_logs", conn)
+        df_l = pd.read_sql_query("SELECT * FROM analysis_logs ORDER BY id DESC", conn)
         st.dataframe(df_l, use_container_width=True)
         conn.close()
 
-    with coll_tab:
+    with c_tab:
         conn = sqlite3.connect('pet_analysis.db')
-        df_c = pd.read_sql_query("SELECT * FROM collected_images", conn)
-        
-        if st.checkbox("🖼️ 이미지 라이브러리 크게 보기", value=True):
-                # 한 줄에 2개씩 크게 보여줘서 글씨 유무를 확실히 판단하게 함
-                img_cols = st.columns(2) 
-                for i, row in df_c.iterrows():
-                    with img_cols[i % 2]:
-                        if os.path.exists(row['img_path']):
-                            st.image(row['img_path'], use_container_width=True)
-                            st.caption(f"ID: {row['id']} | {row['breed']}")
-            
+        df_c = pd.read_sql_query("SELECT * FROM collected_images ORDER BY id DESC", conn)
+        if not df_c.empty:
+            st.subheader("🧹 오염 데이터 정화")
+            to_del = st.multiselect("삭제할 데이터 ID 선택", df_c['id'].tolist())
+            if st.button("🗑️ 선택 항목 영구 삭제", type="primary"):
+                cur = conn.cursor()
+                for d_id in to_del:
+                    cur.execute("SELECT img_path FROM collected_images WHERE id = ?", (d_id,))
+                    p = cur.fetchone()[0]
+                    if os.path.exists(p): os.remove(p)
+                    cur.execute("DELETE FROM collected_images WHERE id = ?", (d_id,))
+                conn.commit()
+                st.rerun()
+            st.divider()
+            st.dataframe(df_c, use_container_width=True)
+        else:
+            st.info("수집된 데이터가 없습니다.")
+        conn.close()
 
-
-# 하단 푸터
 st.divider()
-st.caption("본 플랫폼은 AI 기반 펫 테크 비즈니스 모델 검증용입니다. 제휴 문의: bslee@yahoo.com")
+st.caption("비즈니스 제휴 및 체험단 문의: [bslee@yahoo.com]")
