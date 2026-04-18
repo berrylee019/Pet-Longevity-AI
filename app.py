@@ -26,68 +26,89 @@ def init_system():
 
 init_system()
 
-# --- 2. PDF 생성 로직 (하단 비즈니스 문구 업데이트) ---
+# --- 2. PDF 생성 로직 (1페이지 절대 사수 버전 적용) ---
 class PetReportPDF(FPDF):
     def header(self):
         header_img = "card_bg1.png"
         if os.path.exists(header_img):
+            # 헤더 이미지 여백 축소
             self.image(header_img, x=10, y=10, w=190)
-            self.ln(40)
+            self.ln(32)
         else:
             self.set_font('Helvetica', 'B', 20)
-            self.cell(0, 20, 'Pet Health Report', ln=True, align='C')
-            self.ln(10)
+            self.cell(0, 15, 'Pet Health Report', ln=True, align='C')
+            self.ln(5)
 
 def create_pdf_report(breed, bcs, pace, reason):
     try:
         pdf = PetReportPDF()
+        # [핵심] 자동 페이지 나누기 강제 비활성화 (1페이지 고정)
+        pdf.set_auto_page_break(auto=False, margin=0)
+        
         font_path = "NanumGothicBold.ttf"
         if not os.path.exists(font_path): return None
         pdf.add_font('NanumGothic', 'B', font_path, uni=True)
         pdf.add_page()
         
-        pdf.set_font('NanumGothic', 'B', 22)
-        pdf.cell(0, 15, 'Anti-Aging & Body Condition Report', ln=True, align='C')
-        pdf.ln(10)
+        # 타이틀 (크기 및 간격 최적화)
+        pdf.set_font('NanumGothic', 'B', 18)
+        pdf.cell(0, 10, 'Anti-Aging & Body Condition Report', ln=True, align='C')
+        pdf.ln(5)
         
+        # 진단 결과 테이블 (높이 압축)
         table_width = 160
         start_x = (210 - table_width) / 2
         data = [['진단 대상 견종', f'{breed}'], ['체형 점수 (BCS)', f'{bcs} / 9 점'], 
                 ['예상 노화 속도', f'{pace} 배속'], ['진단 일시', datetime.datetime.now().strftime('%Y-%m-%d %H:%M')]]
         
+        pdf.set_font('NanumGothic', 'B', 10)
         for row in data:
             pdf.set_x(start_x)
             pdf.set_fill_color(245, 245, 245)
-            pdf.cell(60, 12, row[0], border=1, fill=True)
-            pdf.cell(100, 12, row[1], border=1, ln=True, align='C')
+            pdf.cell(50, 8, row[0], border=1, fill=True)
+            pdf.cell(110, 8, row[1], border=1, ln=True, align='C')
             
-        pdf.ln(20)
+        pdf.ln(8)
+        
+        # AI 종합 소견 섹션
         pdf.set_x(start_x)
-        pdf.set_font('NanumGothic', 'B', 16)
+        pdf.set_font('NanumGothic', 'B', 14)
         pdf.set_text_color(0, 51, 102)
-        pdf.cell(0, 10, '[ AI 수의사 종합 소견 ]', ln=True)
-        pdf.ln(5)
+        pdf.cell(0, 8, '[ AI 수의사 종합 소견 ]', ln=True)
+        pdf.ln(2)
         
         clean_reason = reason.replace('**', '').replace('*', '').strip()
-        pdf.set_font('NanumGothic', 'B', 12)
+        
+        # [핵심] 글자 수에 따른 가변 폰트 시스템 (1페이지 사수)
+        if len(clean_reason) > 600:
+            font_size = 8
+        elif len(clean_reason) > 400:
+            font_size = 9
+        else:
+            font_size = 10
+            
+        pdf.set_font('NanumGothic', 'B', font_size)
         pdf.set_text_color(60, 60, 60)
         pdf.set_x(start_x)
-        pdf.multi_cell(table_width, 10, clean_reason, border=0, align='L')
+        # 줄 간격(5)을 조절하여 압축도 높임
+        pdf.multi_cell(table_width, 5.5, clean_reason, border=0, align='L')
         
-        # --- 형님 요청 문구 추가 (하단부) ---
-        pdf.set_y(265)
+        # --- 하단 비즈니스 문구 (절대 위치 고정) ---
+        pdf.set_y(260) 
         pdf.set_font('NanumGothic', 'B', 11)
-        pdf.set_text_color(200, 0, 0) # 강조를 위해 붉은색 톤 적용
-        pdf.cell(0, 10, '초정밀 분석 요청 : bslee@yahoo.com', align='C', ln=True)
+        pdf.set_text_color(200, 0, 0)
+        pdf.cell(0, 8, '초정밀 분석 요청 : bslee@yahoo.com', align='C', ln=True)
         
-        pdf.set_font('NanumGothic', 'B', 9)
+        pdf.set_font('NanumGothic', 'B', 8)
         pdf.set_text_color(160, 160, 160)
-        pdf.cell(0, 5, '제작: [견종별 노화 정밀 분석기] | 본 보고서는 AI 시뮬레이션 결과입니다.', align='C')
+        pdf.cell(0, 5, '제작: [견종별 노화 정밀 분석기] | 본 보고서는 AI 시뮬레이션 결과입니다.', align='C', ln=True)
         
         report_path = f"reports/Report_{breed}_{datetime.datetime.now().strftime('%Y%m%d%H%M')}.pdf"
         pdf.output(report_path)
         return report_path
-    except: return None
+    except Exception as e:
+        print(f"PDF 생성 에러: {e}")
+        return None
 
 # --- 3. AI 분석 및 노화 속도 계산 로직 ---
 def analyze_pet_multi_view(side_img_path, top_img_path, breed_name):
@@ -111,10 +132,8 @@ def analyze_pet_multi_view(side_img_path, top_img_path, breed_name):
     except: return {"bcs": 5, "reason": "AI 분석 중 오류가 발생했습니다."}
 
 def calculate_pace_of_aging(bcs, breed):
-    # 기본 노화 배속 1.0 (정상)
-    # 표준 점수(5점)에서 멀어질수록 배속 증가
     pace = 1.0 + (abs(5-bcs) * 0.15)
-    if breed == "리트리버": pace *= 1.15 # 대형견 가중치
+    if breed == "리트리버": pace *= 1.15
     return round(pace, 2)
 
 # --- 4. Streamlit UI ---
@@ -122,6 +141,7 @@ st.set_page_config(page_title="Pet Longevity AI", layout="wide")
 
 if "GEMINI_API_KEY" in st.secrets:
     genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+    # 모델명 유지 (최신버전 사용 시 gemini-1.5-flash 권장)
     model = genai.GenerativeModel('gemini-2.5-flash')
 
 st.sidebar.title("🐾 시스템 설정")
@@ -153,7 +173,6 @@ with tabs[0]:
                         st.download_button("📄 PDF 진단서 다운로드", f, file_name=f"Report_{selected_breed}.pdf", use_container_width=True)
         else: st.warning("사진 2장을 모두 업로드해주세요.")
 
-# [Tab 1] 고품질 이미지 수집 (강화 필터 유지)
 if is_admin:
     with tabs[1]:
         st.header("🌐 고품질 데이터 수집 (Filter 강화)")
@@ -179,8 +198,6 @@ if is_admin:
             conn.close()
             st.success("완료!")
 
-
-    # [Tab 2] 데이터 센터
     with tabs[2]:
         st.header("📊 데이터 관리 센터 (Admin Only)")
         l_tab, c_tab = st.tabs(["📋 분석 로그", "🖼️ 수집 이미지 정화"])
