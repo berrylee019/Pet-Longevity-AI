@@ -9,6 +9,12 @@ from PIL import Image
 from fpdf import FPDF
 from icrawler.builtin import BingImageCrawler, GoogleImageCrawler, BaiduImageCrawler
 
+# --- 한국 시간(KST) 설정 로직 ---
+def get_kst_now():
+    # UTC+9 시간대 설정
+    kst = datetime.timezone(datetime.timedelta(hours=9))
+    return datetime.datetime.now(kst)
+    
 # --- 1. 시스템 초기화 ---
 def init_system():
     for path in ["dataset/multi_view", "reports", "database_images"]:
