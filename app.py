@@ -26,7 +26,7 @@ def init_system():
 
 init_system()
 
-# --- 2. PDF 생성 로직 (상단 로고 및 중앙 정렬) ---
+# --- 2. PDF 생성 로직 (상단 로고 및 레이아웃 최적화) ---
 class PetReportPDF(FPDF):
     def header(self):
         header_img = "card_bg1.png"
@@ -34,68 +34,105 @@ class PetReportPDF(FPDF):
             self.image(header_img, x=10, y=10, w=190)
             self.ln(40)
         else:
+            # 이미지 없을 경우 기본 텍스트 헤더
+            self.add_font('NanumGothic', 'B', "NanumGothicBold.ttf", uni=True)
             self.set_font('NanumGothic', 'B', 25)
             self.set_text_color(0, 51, 102)
             self.cell(0, 20, '강아지 노화 정밀 진단서', ln=True, align='C')
             self.ln(10)
 
 def create_pdf_report(breed, bcs, pace, reason):
-    pdf = PetReportPDF()
-    font_path = "NanumGothicBold.ttf"
-    if not os.path.exists(font_path): return None
-    pdf.add_font('NanumGothic', 'B', font_path, uni=True)
-    pdf.add_page()
-    
-    pdf.set_font('NanumGothic', 'B', 22)
-    pdf.cell(0, 15, 'Anti-Aging & Body Condition Report', ln=True, align='C')
-    pdf.ln(10)
-    
-    table_width = 160
-    start_x = (210 - table_width) / 2
-    data = [['진단 대상 견종', f'{breed}'], ['체형 점수 (BCS)', f'{bcs} / 9 점'], 
-            ['예상 노화 속도', f'{pace} 배속'], ['진단 일시', datetime.datetime.now().strftime('%Y-%m-%d %H:%M')]]
-    
-    for row in data:
+    try:
+        pdf = PetReportPDF()
+        font_path = "NanumGothicBold.ttf"
+        if not os.path.exists(font_path):
+            st.error("⚠️ 폰트 파일(NanumGothicBold.ttf)이 없어 PDF를 생성할 수 없습니다.")
+            return None
+        
+        pdf.add_font('NanumGothic', 'B', font_path, uni=True)
+        pdf.add_page()
+        
+        # 메인 타이틀
+        pdf.set_font('NanumGothic', 'B', 22)
+        pdf.set_text_color(30, 30, 30)
+        pdf.cell(0, 15, 'Anti-Aging & Body Condition Report', ln=True, align='C')
+        pdf.ln(10)
+        
+        # 요약 데이터 표 (중앙 정렬)
+        table_width = 160
+        start_x = (210 - table_width) / 2
+        data = [
+            ['진단 대상 견종', f'{breed}'],
+            ['체형 점수 (BCS)', f'{bcs} / 9 점'],
+            ['예상 노화 속도', f'{pace} 배속'],
+            ['진단 일시', datetime.datetime.now().strftime('%Y-%m-%d %H:%M')]
+        ]
+        
+        pdf.set_font('NanumGothic', 'B', 14)
+        for row in data:
+            pdf.set_x(start_x)
+            pdf.set_fill_color(245, 245, 245)
+            pdf.cell(60, 12, row[0], border=1, fill=True)
+            pdf.cell(100, 12, row[1], border=1, ln=True, align='C')
+        
+        pdf.ln(20)
+        
+        # AI 소견 섹션
         pdf.set_x(start_x)
-        pdf.set_fill_color(245, 245, 245)
-        pdf.cell(60, 12, row[0], border=1, fill=True)
-        pdf.cell(100, 12, row[1], border=1, ln=True, align='C')
-    
-    pdf.ln(20)
-    pdf.set_x(start_x)
-    pdf.set_font('NanumGothic', 'B', 16)
-    pdf.set_text_color(0, 51, 102)
-    pdf.cell(0, 10, '[ AI 수의사 종합 소견 ]', ln=True)
-    pdf.ln(5)
-    
-    clean_reason = reason.replace('**', '').replace('*', '').strip()
-    pdf.set_font('NanumGothic', 'B', 12)
-    pdf.set_text_color(60, 60, 60)
-    pdf.set_x(start_x)
-    pdf.multi_cell(table_width, 10, clean_reason, border=0, align='L')
-    
-    pdf.set_y(265)
-    pdf.set_font('NanumGothic', 'B', 10)
-    pdf.set_text_color(160, 160, 160)
-    pdf.cell(0, 10, '제작: [견종별 노화 정밀 분석기] | 다이어트 체험단 모집 중', align='C')
-    
-    report_path = f"reports/Report_{breed}_{datetime.datetime.now().strftime('%Y%m%d%H%M')}.pdf"
-    pdf.output(report_path)
-    return report_path
+        pdf.set_font('NanumGothic', 'B', 16)
+        pdf.set_text_color(0, 51, 102)
+        pdf.cell(0, 10, '[ AI 수의사 종합 소견 ]', ln=True)
+        pdf.ln(5)
+        
+        # 불필요한 마크다운 기호 제거
+        clean_reason = reason.replace('**', '').replace('*', '').strip()
+        pdf.set_font('NanumGothic', 'B', 12)
+        pdf.set_text_color(60, 60, 60)
+        pdf.set_x(start_x)
+        pdf.multi_cell(table_width, 10, clean_reason, border=0, align='L')
+        
+        # 푸터
+        pdf.set_y(265)
+        pdf.set_font('NanumGothic', 'B', 10)
+        pdf.set_text_color(160, 160, 160)
+        pdf.cell(0, 10, '제작: [견종별 노화 정밀 분석기] | 다이어트 체험단 모집 중', align='C')
+        
+        report_path = f"reports/Report_{breed}_{datetime.datetime.now().strftime('%Y%m%d%H%M')}.pdf"
+        pdf.output(report_path)
+        return report_path
+    except Exception as e:
+        st.error(f"PDF 생성 중 예외 발생: {e}")
+        return None
 
-# --- 3. AI 및 계산 로직 ---
+# --- 3. AI 분석 및 계산 로직 (에러 방지 강화) ---
 def analyze_pet_multi_view(side_img_path, top_img_path, breed_name):
     try:
         side_img = Image.open(side_img_path)
         top_img = Image.open(top_img_path)
-        prompt = f"수의사로서 {breed_name} 사진 분석. '점수 / 소견' 형식(특수문자 제외)으로 작성."
+        
+        prompt = f"""
+        너는 베테랑 수의사야. {breed_name}의 옆/위 사진을 정밀 분석해줘.
+        1. BCS 점수(1-9)를 결정해.
+        2. 소견 작성 시 특수기호(*, **)는 절대 쓰지 말고 깔끔한 문장으로만 말해.
+        반드시 '점수 / 소견' 형식으로만 대답해.
+        """
+        
         response = model.generate_content([prompt, side_img, top_img])
         res_text = response.text.strip()
-        bcs_val = int(re.findall(r'[1-9]', res_text)[0]) if re.findall(r'[1-9]', res_text) else 5
-        clean_reason = res_text.split('/')[-1].strip() if '/' in res_text else res_text
+        
+        # 결과 파싱 보안 강화
+        if '/' in res_text:
+            parts = res_text.split('/')
+            bcs_match = re.search(r'\d', parts[0])
+            bcs_val = int(bcs_match.group()) if bcs_match else 5
+            clean_reason = parts[1].strip()
+        else:
+            bcs_val = 5
+            clean_reason = res_text
+            
         return {"bcs": bcs_val, "reason": clean_reason}
-    except:
-        return {"bcs": 5, "reason": "이미지 분석 오류."}
+    except Exception as e:
+        return {"bcs": 5, "reason": f"AI 분석 엔진 일시 오류 (사유: {str(e)})"}
 
 def calculate_pace_of_aging(bcs, breed):
     pace = 1.0 + (abs(5-bcs) * 0.15)
@@ -107,29 +144,32 @@ st.set_page_config(page_title="Pet Longevity AI", layout="wide")
 
 if "GEMINI_API_KEY" in st.secrets:
     genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-    model = genai.GenerativeModel('gemini-2.5-flash')
+    # 모델명 안정화 (gemini-1.5-flash 권장)
+    model = genai.GenerativeModel('gemini-1.5-flash')
+else:
+    st.error("API 키 설정이 필요합니다.")
 
 # 사이드바 설정
-st.sidebar.title("견종 선택")
+st.sidebar.title("🐾 메뉴 설정")
 selected_breed = st.sidebar.selectbox("대상 견종 선택", ["리트리버", "말티즈", "푸들", "포메라니안"])
 
-# 관리자 인증 로직
+# 관리자 인증 (형님 패스워드: 2004)
 st.sidebar.divider()
-admin_password = st.sidebar.text_input("관리자 패스워드", type="password", help="이미지 수집 및 데이터 센터 접근용")
-is_admin = (admin_password == "2004") # 형님, 원하시는 비밀번호로 수정하세요!
+admin_password = st.sidebar.text_input("관리자 패스워드", type="password")
+is_admin = (admin_password == "2004")
 
-# 탭 구성 (관리자 여부에 따라 탭 개수 조정)
+# 탭 동적 구성
+tab_list = ["🔍 정밀 분석 및 PDF"]
 if is_admin:
-    tabs = st.tabs(["🔍 정밀 분석 및 PDF", "🌐 이미지 수집", "📊 데이터 센터"])
-else:
-    tabs = st.tabs(["🔍 정밀 분석 및 PDF"])
+    tab_list += ["🌐 이미지 수집", "📊 데이터 센터"]
+tabs = st.tabs(tab_list)
 
-# [Tab 1] 일반 사용자용: 정밀 분석 및 PDF
+# [Tab 1] 분석 및 발급 (일반/관리자 공통)
 with tabs[0]:
     st.header("🐶 AI 수의사 노화 정밀 진단")
     c1, c2 = st.columns(2)
-    with c1: side_file = st.file_uploader("옆모습 사진 업로드", type=['jpg', 'jpeg', 'png'])
-    with c2: top_file = st.file_uploader("윗모습 사진 업로드", type=['jpg', 'jpeg', 'png'])
+    with c1: side_file = st.file_uploader("옆모습 사진 업로드", type=['jpg', 'jpeg', 'png'], key="side_up")
+    with c2: top_file = st.file_uploader("윗모습 사진 업로드", type=['jpg', 'jpeg', 'png'], key="top_up")
     
     if st.button("🧠 정밀 진단 및 리포트 생성", use_container_width=True):
         if side_file and top_file:
@@ -138,11 +178,11 @@ with tabs[0]:
             with open(s_p, "wb") as f: f.write(side_file.getbuffer())
             with open(t_p, "wb") as f: f.write(top_file.getbuffer())
             
-            with st.spinner("AI 분석 중..."):
+            with st.spinner("AI가 체형 사진을 정밀 분석 중입니다..."):
                 res = analyze_pet_multi_view(s_p, t_p, selected_breed)
                 pace = calculate_pace_of_aging(res["bcs"], selected_breed)
                 
-                # 요약 결과 표시
+                # 화면 결과 표시
                 st.subheader("📋 실시간 진단 요약")
                 m1, m2, m3 = st.columns(3)
                 m1.metric("견종", selected_breed)
@@ -150,7 +190,7 @@ with tabs[0]:
                 m3.metric("노화 속도", f"{pace}x")
                 st.info(f"**AI 종합 소견:** {res['reason']}")
                 
-                # DB 저장
+                # DB 기록
                 conn = sqlite3.connect('pet_analysis.db')
                 conn.cursor().execute("INSERT INTO analysis_logs (breed, bcs, pace, reason, date) VALUES (?,?,?,?,?)",
                                      (selected_breed, res["bcs"], pace, res["reason"], datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')))
@@ -161,14 +201,13 @@ with tabs[0]:
                 pdf_path = create_pdf_report(selected_breed, res["bcs"], pace, res["reason"])
                 if pdf_path:
                     with open(pdf_path, "rb") as f:
-                        st.download_button("📄 정밀 진단서 PDF 다운로드 (SNS 공유용)", f, 
+                        st.download_button("📄 정밀 진단서 PDF 다운로드", f, 
                                          file_name=f"Report_{selected_breed}.pdf", use_container_width=True)
         else:
-            st.warning("분석을 위해 사진 2장을 모두 업로드해주세요.")
+            st.warning("사진 2장을 모두 업로드해 주세요.")
 
-# 관리자 전용 탭 활성화
+# 관리자 전용 기능
 if is_admin:
-    # [Tab 2] 이미지 수집
     with tabs[1]:
         st.header("🌐 데이터 수집 (Admin Only)")
         query = st.text_input("검색 최적화 쿼리", f"{selected_breed} dog body condition -text")
@@ -184,9 +223,8 @@ if is_admin:
                                      (selected_breed, f_path, "Bing", datetime.datetime.now().strftime('%Y-%m-%d %H:%M')))
             conn.commit()
             conn.close()
-            st.success("수집 완료!")
+            st.success("데이터 수집 완료!")
 
-    # [Tab 3] 데이터 센터
     with tabs[2]:
         st.header("📊 데이터 관리 센터 (Admin Only)")
         l_tab, c_tab = st.tabs(["📋 분석 로그", "🖼️ 수집 이미지 정화"])
@@ -204,8 +242,8 @@ if is_admin:
                     cur = conn.cursor()
                     for d_id in to_del:
                         cur.execute("SELECT img_path FROM collected_images WHERE id = ?", (d_id,))
-                        p = cur.fetchone()[0]
-                        if os.path.exists(p): os.remove(p)
+                        row = cur.fetchone()
+                        if row and os.path.exists(row[0]): os.remove(row[0])
                         cur.execute("DELETE FROM collected_images WHERE id = ?", (d_id,))
                     conn.commit()
                     st.rerun()
