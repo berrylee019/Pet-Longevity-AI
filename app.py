@@ -178,16 +178,7 @@ with tab3:
                             st.image(row['img_path'], use_container_width=True)
                             st.caption(f"ID: {row['id']} | {row['breed']}")
             
-            st.divider()
-            st.dataframe(df_c, use_container_width=True)
-            if st.checkbox("이미지 갤러리 보기"):
-                idx_cols = st.columns(4)
-                for i, row in df_c.iterrows():
-                    with idx_cols[i % 4]:
-                        st.image(row['img_path'], caption=f"ID: {row['id']}")
-        else:
-            st.info("데이터가 없습니다.")
-        conn.close()
+
 
 # 하단 푸터
 st.divider()
