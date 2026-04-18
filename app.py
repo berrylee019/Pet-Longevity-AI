@@ -2,6 +2,7 @@ import streamlit as st
 import google.generativeai as genai
 import os
 import sqlite3
+import pandas as pd
 import datetime
 import re
 import random
