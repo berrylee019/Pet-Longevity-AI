@@ -5,155 +5,147 @@ import sqlite3
 import datetime
 import re
 import pandas as pd
-import textwrap
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image
+from fpdf import FPDF
 from icrawler.builtin import BingImageCrawler
 
-# --- 1. 시스템 초기화 및 DB 설정 ---
+# --- 1. 시스템 초기화 ---
 def init_system():
-    for path in ["dataset/multi_view", "cards", "database_images"]:
-        if not os.path.exists(path):
-            os.makedirs(path)
+    for path in ["dataset/multi_view", "reports", "database_images"]:
+        if not os.path.exists(path): os.makedirs(path)
     
     conn = sqlite3.connect('pet_analysis.db')
     c = conn.cursor()
     c.execute('''CREATE TABLE IF NOT EXISTS analysis_logs
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT, breed TEXT, side_img TEXT, top_img TEXT, 
-                  bcs INTEGER, pace REAL, reason TEXT, date TEXT)''')
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT, breed TEXT, bcs INTEGER, pace REAL, reason TEXT, date TEXT)''')
     c.execute('''CREATE TABLE IF NOT EXISTS collected_images
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT, breed TEXT, img_path TEXT, 
-                  source TEXT, collect_date TEXT)''')
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT, breed TEXT, img_path TEXT, collect_date TEXT)''')
     conn.commit()
     conn.close()
 
 init_system()
 
-# --- 2. 핵심 로직 함수 (디자인 및 요약 최적화 교체본) ---
+# --- 2. PDF 생성 함수 (이미지 좌표 문제 근본 해결) ---
+class PetReportPDF(FPDF):
+    def header(self):
+        self.set_font('NanumGothic', 'B', 20)
+        self.set_text_color(0, 51, 102)
+        self.cell(0, 15, '강아지 노화 정밀 진단서', ln=True, align='C')
+        self.ln(5)
 
+def create_pdf_report(breed, bcs, pace, reason):
+    pdf = PetReportPDF()
+    # 폰트 등록 (NanumGothicBold.ttf 파일이 같은 폴더에 있어야 함)
+    pdf.add_font('NanumGothic', '', 'NanumGothicBold.ttf', uni=True)
+    pdf.add_page()
+    
+    # 테두리 및 디자인
+    pdf.set_draw_color(0, 51, 102)
+    pdf.set_line_width(1)
+    pdf.rect(10, 10, 190, 277)
+    
+    # 상세 내용
+    pdf.set_font('NanumGothic', '', 14)
+    pdf.set_text_color(50, 50, 50)
+    
+    data = [
+        ['진단 대상', breed],
+        ['체형 점수 (BCS)', f'{bcs} / 9 점'],
+        ['예상 노화 속도', f'{pace} 배속'],
+        ['진단 일시', datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')]
+    ]
+    
+    pdf.ln(10)
+    for row in data:
+        pdf.cell(50, 12, row[0], border=1)
+        pdf.cell(130, 12, row[1], border=1, ln=True)
+    
+    pdf.ln(10)
+    pdf.set_font('NanumGothic', '', 16)
+    pdf.cell(0, 10, '[ AI 수의사 종합 소견 ]', ln=True)
+    
+    pdf.set_font('NanumGothic', '', 12)
+    pdf.multi_cell(0, 10, reason, border=0)
+    
+    pdf.ln(20)
+    pdf.set_font('NanumGothic', '', 10)
+    pdf.set_text_color(150, 150, 150)
+    pdf.cell(0, 10, '제작: [견종별 노화 정밀 분석기] | 본 진단은 AI 분석 결과로 참고용으로 활용하세요.', align='C')
+    
+    report_path = f"reports/Report_{breed}_{datetime.datetime.now().strftime('%Y%m%d%H%M')}.pdf"
+    pdf.output(report_path)
+    return report_path
+
+# --- 3. AI 분석 로직 ---
 def analyze_pet_multi_view(side_img_path, top_img_path, breed_name):
-    """AI에게 핵심 요약 및 인사말 생략을 지시하는 최적화 함수"""
     try:
         side_img = Image.open(side_img_path)
         top_img = Image.open(top_img_path)
-        
-        # 디자인을 위해 한글 150자 이내 요약을 강제합니다.
-        prompt = f"""
-        너는 베테랑 수의사야. {breed_name}의 옆모습과 윗모습 사진을 분석해줘.
-        1. BCS 점수 (1~9)를 결정해.
-        2. 소견을 작성할 때 '안녕하세요' 같은 인사말은 생략하고, 
-           갈비뼈 상태, 허리 라인, 복부 굴곡에 대한 핵심 진단만 한글 150자 이내로 짧고 명확하게 작성해줘.
-        결과 형식: 점수 / 소견
-        """
+        prompt = f"수의사로서 {breed_name} 사진 분석. 결과는 '점수 / 소견' 형식으로 한글 200자 내외 작성."
         response = model.generate_content([prompt, side_img, top_img])
         res_text = response.text.strip()
-        
-        # 점수와 소견 분리 추출
         bcs_val = int(re.findall(r'[1-9]', res_text)[0]) if re.findall(r'[1-9]', res_text) else 5
         clean_reason = res_text.split('/')[-1].strip() if '/' in res_text else res_text
-        
         return {"bcs": bcs_val, "reason": clean_reason}
-    except Exception as e:
-        return {"bcs": 5, "reason": f"분석 중 오류 발생: {str(e)}"}
+    except:
+        return {"bcs": 5, "reason": "분석 실패. 사진을 확인해 주세요."}
 
-def create_diagnosis_card(breed, bcs, pace, reason):
-    """가변 폰트 및 줄바꿈 최적화가 적용된 카드 생성 함수"""
-    try:
-        bg_path = "card_bg.png"
-        img = Image.open(bg_path) if os.path.exists(bg_path) else Image.new('RGB', (1000, 1300), color=(255, 255, 255))
-        draw = ImageDraw.Draw(img)
-        
-        font_path = "NanumGothicBold.ttf"
-        if not os.path.exists(font_path):
-            st.error("⚠️ NanumGothicBold.ttf 파일이 필요합니다.")
-            return None
-
-        # 1. 상단 견종 텍스트
-        font_breed = ImageFont.truetype(font_path, 45)
-        draw.text((420, 45), breed, font=font_breed, fill=(255, 255, 255)) 
-
-        # 2. 중간 지표 (BCS, 노화 속도)
-        font_score = ImageFont.truetype(font_path, 100)
-        font_pace = ImageFont.truetype(font_path, 70)
-        draw.text((215, 470), str(bcs), font=font_score, fill=(30, 30, 30))
-        draw.text((615, 415), f"{pace}x", font=font_pace, fill=(210, 40, 40))
-
-        # 3. 하단 종합 소견 (글자 수에 따른 폰트 사이즈 가변 적용)
-        text_len = len(reason)
-        if text_len > 120: font_size = 18
-        elif text_len > 80: font_size = 22
-        else: font_size = 25
-        
-        font_reason = ImageFont.truetype(font_path, font_size)
-        
-        # 줄바꿈 폭 최적화 (여백 확보)
-        wrap_width = 40 if font_size > 20 else 48
-        lines = textwrap.wrap(reason, width=wrap_width)
-        
-        y_text = 680 # 소견 시작 좌표
-        for line in lines:
-            if y_text > 950: break # 카드 하단 범위를 넘어가면 중단
-            draw.text((80, y_text), line, font=font_reason, fill=(60, 60, 60))
-            y_text += (font_size + 12) # 행간 간격 적용
-            
-        card_path = f"cards/card_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
-        img.save(card_path)
-        return card_path
-    except Exception as e:
-        st.error(f"카드 생성 실패: {e}")
-        return None
-
-# --- 기타 비즈니스 로직 ---
-def calculate_pace_of_aging(bcs_score, breed):
-    base_pace = 1.0
-    if bcs_score <= 3: pace = base_pace + (5 - bcs_score) * 0.12
-    elif 4 <= bcs_score <= 5: pace = base_pace
-    else: pace = base_pace + (bcs_score - 5) * 0.15
+def calculate_pace_of_aging(bcs, breed):
+    pace = 1.0 + (abs(5-bcs) * 0.15)
     if breed == "리트리버": pace *= 1.15
     return round(pace, 2)
 
-# --- 3. UI 구성 (Streamlit) ---
+# --- 4. Streamlit UI ---
 st.set_page_config(page_title="Pet Longevity AI", layout="wide")
 
 if "GEMINI_API_KEY" in st.secrets:
     genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
     model = genai.GenerativeModel('gemini-2.5-flash')
 
-selected_breed = st.sidebar.selectbox("대상 견종 선택", ["리트리버", "말티즈", "푸들", "포메라니안"])
-tab1, tab2, tab3 = st.tabs(["🔍 정밀 분석 카드", "🌐 이미지 수집", "📊 데이터 센터"])
+selected_breed = st.sidebar.selectbox("견종 선택", ["리트리버", "말티즈", "푸들", "포메라니안"])
+tab1, tab2, tab3 = st.tabs(["🔍 정밀 분석", "🌐 데이터 수집", "📊 데이터 센터"])
 
-# [Tab 1] 분석 및 발급
 with tab1:
-    st.header("Step 2. AI 정밀 진단 카드 발급")
-    col1, col2 = st.columns(2)
-    with col1: side_file = st.file_uploader("📸 옆모습 사진 (Side)", type=['jpg', 'jpeg', 'png'])
-    with col2: top_file = st.file_uploader("📸 윗모습 사진 (Top)", type=['jpg', 'jpeg', 'png'])
+    st.header("🐶 AI 수의사 노화 정밀 분석")
+    c1, c2 = st.columns(2)
+    with c1: side_file = st.file_uploader("옆모습 업로드", type=['jpg','png'])
+    with c2: top_file = st.file_uploader("윗모습 업로드", type=['jpg','png'])
 
-    if st.button("🧠 AI 수의사 정밀 진단 시작", use_container_width=True):
+    if st.button("🧠 정밀 진단 시작", use_container_width=True):
         if side_file and top_file:
+            # 사진 저장
             t_stamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-            s_path, t_path = f"database_images/{t_stamp}_s.png", f"database_images/{t_stamp}_t.png"
-            with open(s_path, "wb") as f: f.write(side_file.getbuffer())
-            with open(t_path, "wb") as f: f.write(top_file.getbuffer())
+            s_p, t_p = f"database_images/{t_stamp}_s.png", f"database_images/{t_stamp}_t.png"
+            with open(s_p, "wb") as f: f.write(side_file.getbuffer())
+            with open(t_p, "wb") as f: f.write(top_file.getbuffer())
             
-            with st.spinner("AI가 체형을 대조 분석 중입니다..."):
-                res = analyze_pet_multi_view(s_path, t_path, selected_breed)
+            with st.spinner("AI 분석 중..."):
+                res = analyze_pet_multi_view(s_p, t_p, selected_breed)
                 pace = calculate_pace_of_aging(res["bcs"], selected_breed)
                 
-                # DB 저장
+                # 결과 표시 (표 및 지표)
+                st.subheader("📋 분석 결과")
+                m1, m2, m3 = st.columns(3)
+                m1.metric("대상 견종", selected_breed)
+                m2.metric("체형 점수 (BCS)", f"{res['bcs']} / 9")
+                m3.metric("예상 노화 속도", f"{pace}x")
+                
+                st.info(f"**AI 수의사 종합 소견:**\n\n{res['reason']}")
+                
+                # DB 기록
                 conn = sqlite3.connect('pet_analysis.db')
-                conn.cursor().execute("INSERT INTO analysis_logs (breed, side_img, top_img, bcs, pace, reason, date) VALUES (?,?,?,?,?,?,?)",
-                                     (selected_breed, s_path, t_path, res["bcs"], pace, res["reason"], datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')))
+                conn.cursor().execute("INSERT INTO analysis_logs (breed, bcs, pace, reason, date) VALUES (?,?,?,?,?)",
+                                     (selected_breed, res["bcs"], pace, res["reason"], datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')))
                 conn.commit()
                 conn.close()
 
-                # 카드 이미지 생성
-                card = create_diagnosis_card(selected_breed, res["bcs"], pace, res["reason"])
-                if card:
-                    st.image(card, width=700)
-                    with open(card, "rb") as f:
-                        st.download_button("📥 진단 카드 다운로드 (SNS 공유용)", f, file_name=f"Report_{selected_breed}_{t_stamp}.png")
+                # PDF 생성 및 다운로드 버튼
+                pdf_path = create_pdf_report(selected_breed, res["bcs"], pace, res["reason"])
+                with open(pdf_path, "rb") as f:
+                    st.download_button("📄 정밀 진단서 PDF 다운로드 (SNS 공유용)", f, 
+                                     file_name=f"Report_{selected_breed}.pdf", use_container_width=True)
         else:
-            st.warning("옆모습과 윗모습 사진을 모두 업로드해주세요.")
+            st.warning("사진 2장을 모두 올려주세요.")
 
 # [Tab 2] 이미지 수집
 with tab2:
@@ -211,4 +203,4 @@ with tab3:
         conn.close()
 
 st.divider()
-st.caption("비즈니스 제휴 및 체험단 문의: [bslee@yahoo.com]")
+st.caption("비즈니스 제휴 및 체험단 문의: bslee@yahoo.com")
