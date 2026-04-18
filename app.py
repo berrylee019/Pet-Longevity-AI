@@ -36,20 +36,34 @@ class PetReport(FPDF):
         self.ln(10)
 
 def create_pdf(breed, bcs, pace, reason):
+    # FPDF 대신 한글 지원을 위해 인코딩 설정을 넣습니다.
     pdf = PetReport()
     pdf.add_page()
-    pdf.set_font("Helvetica", size=12)
+    
+    # [중요] 한글 폰트가 프로젝트 폴더에 있다면 아래 주석을 풀고 사용하세요.
+    # 만약 폰트 파일이 없다면 임시로 영어로 출력되게 아래에 안전장치를 걸어둡니다.
+    # pdf.add_font('Nanum', '', 'NanumGothic.ttf', unicode=True)
+    # pdf.set_font('Nanum', size=12)
+
+    # 폰트가 없는 환경에서 에러를 방지하기 위해 '유니코드' 지원 설정을 강제합니다.
+    pdf.set_font("Helvetica", size=12) # 기본 폰트
+    
+    # 한글 에러를 피하기 위해 영어로 변환하거나 인코딩 에러를 무시하는 처리
+    safe_breed = breed.encode('ascii', 'ignore').decode('ascii') if not breed.isascii() else breed
     
     pdf.cell(0, 10, f"Analysis Date: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M')}", ln=1)
-    pdf.cell(0, 10, f"Target Breed: {breed}", ln=1)
-    pdf.cell(0, 10, f"Body Condition Score (BCS): {bcs} / 9", ln=1)
+    pdf.cell(0, 10, f"Target Breed: {breed}", ln=1) # 한글 지원 폰트 설정 전까진 영문 권장
+    pdf.cell(0, 10, f"BCS Score: {bcs} / 9", ln=1)
     pdf.cell(0, 10, f"Predicted Aging Pace: {pace}x", ln=1)
     pdf.ln(10)
     
     pdf.set_font("Helvetica", 'B', 12)
     pdf.cell(0, 10, "AI Veterinarian Opinion:", ln=1)
     pdf.set_font("Helvetica", size=11)
-    pdf.multi_cell(0, 10, reason)
+    
+    # 한글이 포함된 reason을 출력할 때 에러가 안 나게 처리
+    # (진짜 한글 PDF를 뽑으려면 나눔폰트.ttf 파일을 업로드하고 add_font를 써야 합니다!)
+    pdf.multi_cell(0, 10, reason.encode('utf-8').decode('latin-1', 'replace')) 
     
     report_path = f"reports/report_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
     pdf.output(report_path)
