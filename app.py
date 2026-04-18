@@ -116,7 +116,7 @@ selected_breed = st.sidebar.selectbox("대상 견종 선택", ["리트리버", "
 # 관리자 인증 로직
 st.sidebar.divider()
 admin_password = st.sidebar.text_input("관리자 패스워드", type="password", help="이미지 수집 및 데이터 센터 접근용")
-is_admin = (admin_password == "1234") # 형님, 원하시는 비밀번호로 수정하세요!
+is_admin = (admin_password == "1004") # 형님, 원하시는 비밀번호로 수정하세요!
 
 # 탭 구성 (관리자 여부에 따라 탭 개수 조정)
 if is_admin:
