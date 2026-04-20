@@ -120,10 +120,6 @@ def analyze_pet_multi_view(side_img_path, top_img_path, breed_name):
         response = model.generate_content(
             model='gemini-2.5-flash',
             contents=[prompt, side_img, top_img],
-            config=types.GenerateContentConfig(
-                max_output_tokens=2048,
-                temperature=0.7
-            )
         )
         res_text = response.text.strip()
         
