@@ -104,13 +104,19 @@ def analyze_pet_multi_view(side_img_path, top_img_path, breed_name):
         side_img = Image.open(side_img_path)
         top_img = Image.open(top_img_path)
         
-        # 프롬프트 강화: 형식을 강제하여 파싱 에러 방지
-        prompt = f"Analyze this {breed_name} for Body Condition Score (1-9). Provide result in format: 'Score: [number] / Opinion: [text]'. Avoid special characters."
+        # --- 프롬프트를 한글로 수정 ---
+        prompt = f"""
+        당신은 전문 수의사입니다. 제공된 {breed_name}의 옆모습과 윗모습 사진을 정밀 분석해주세요.
+        반드시 다음 형식을 엄격히 지켜서 '한국어'로 답변하세요:
+        Score: [BCS 점수 숫자만 1~9 사이] / Opinion: [수의사 관점의 상세한 한글 분석 소견]
+        
+        *주의: 소견에는 체형 상태, 노화와 관련된 건강 조언, 권장 관리법을 포함해 주세요.
+        """
         
         response = model.generate_content([prompt, side_img, top_img])
         res_text = response.text.strip()
         
-        # 결과 파싱 로직 개선
+        # 결과 파싱 로직 (기존과 동일하게 유지하여 안정성 확보)
         bcs_val = 5
         clean_reason = res_text
         
@@ -119,15 +125,12 @@ def analyze_pet_multi_view(side_img_path, top_img_path, breed_name):
             if bcs_match: bcs_val = int(bcs_match.group(1))
             clean_reason = res_text.split("Opinion:")[1].strip()
         else:
-            # 형식이 다를 경우 숫자만이라도 추출 시도
             nums = re.findall(r'\d', res_text)
             if nums: bcs_val = int(nums[0])
 
         return {"bcs": bcs_val, "reason": clean_reason}
     except Exception as e:
-        # 에러 발생 시 로그에 상세 내용 출력
         print(f"AI ERROR: {str(e)}")
-        traceback.print_exc()
         return {"bcs": 5, "reason": f"AI 분석 중 오류가 발생했습니다: {str(e)[:50]}"}
 
 def calculate_pace_of_aging(bcs, breed):
