@@ -195,7 +195,7 @@ with tabs[0]:
                 pdf_p = create_pdf_report(selected_breed, res["bcs"], pace, res["reason"])
                 if pdf_p:
                     with open(pdf_p, "rb") as f:
-                        st.download_button("📄 PDF 진단서 다운로드", f, file_name=f"Report_{selected_breed}.pdf", use_container_width=True)
+                        st.download_button("📄 PDF 진단서 다운로드", f, file_name=f"Report_{selected_breed}.pdf", width='stretch')
         else: st.warning("사진 2장을 모두 업로드해주세요.")
 
 if is_admin:
@@ -228,7 +228,7 @@ if is_admin:
         l_tab, c_tab = st.tabs(["📋 분석 로그", "🖼️ 수집 이미지 정화"])
         with l_tab:
             conn = sqlite3.connect('pet_analysis.db')
-            st.dataframe(pd.read_sql_query("SELECT * FROM analysis_logs ORDER BY id DESC", conn), use_container_width=True)
+            st.dataframe(pd.read_sql_query("SELECT * FROM analysis_logs ORDER BY id DESC", conn), width='stretch')
             conn.close()
         with c_tab:
             conn = sqlite3.connect('pet_analysis.db')
