@@ -182,7 +182,7 @@ with tabs[0]:
     c1, c2 = st.columns(2)
     with c1: side_f = st.file_uploader("옆모습 업로드", type=['jpg', 'jpeg', 'png'], key="side_f")
     with c2: top_f = st.file_uploader("윗모습 업로드", type=['jpg', 'jpeg', 'png'], key="top_f")
-    if st.button("🧠 분석 실행 및 리포트 생성", use_container_width=True):
+    if st.button("🧠 분석 실행 및 리포트 생성", width='stretch'):
         if side_f and top_f:
             t_stamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
             s_p, t_p = f"database_images/{t_stamp}_s.png", f"database_images/{t_stamp}_t.png"
