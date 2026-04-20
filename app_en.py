@@ -117,7 +117,7 @@ def analyze_pet_multi_view(side_img_path, top_img_path, breed_name):
         """
         
         # 신규 라이브러리 호출 방식 (models.generate_content)
-        response = client.models.generate_content(
+        response = models.generate_content(
             model='gemini-2.5-flash',
             contents=[prompt, side_img, top_img],
             config=types.GenerateContentConfig(
