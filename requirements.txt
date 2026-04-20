@@ -5,3 +5,4 @@ torchvision
 google-generativeai
 Pillow
 fpdf
+google-genai
