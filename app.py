@@ -8,6 +8,7 @@ import pandas as pd
 from PIL import Image
 from fpdf import FPDF
 from icrawler.builtin import BingImageCrawler, GoogleImageCrawler, BaiduImageCrawler
+import traceback
 
 # --- 한국 시간(KST) 설정 로직 ---
 def get_kst_now():
