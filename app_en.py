@@ -1,5 +1,6 @@
 import streamlit as st
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 import os
 import sqlite3
 import datetime
@@ -130,8 +131,7 @@ def calculate_pace_of_aging(bcs, breed):
 st.set_page_config(page_title="Pet Longevity AI", layout="wide")
 
 if "GEMINI_API_KEY" in st.secrets:
-    genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-    model = genai.GenerativeModel('gemini-2.5-flash')
+    client = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
 
 st.sidebar.title("🐾 System Config")
 selected_breed = st.sidebar.selectbox("Target Breed", ["Retriever", "Maltese", "Poodle", "Pomeranian", "Others"])
