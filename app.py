@@ -107,56 +107,65 @@ def analyze_pet_multi_view(side_img_path, top_img_path, breed_name):
         side_img = Image.open(side_img_path)
         top_img = Image.open(top_img_path)
         
-        # --- 프롬프트 강화: 상세한 분석과 끊김 방지 지시 ---
+        # --- 프롬프트: 특수문자 사용 금지 및 구조 단순화 지시 ---
         prompt = f"""
-        당신은 20년 경력의 베테랑 수의사입니다. 제공된 {breed_name}의 사진을 정밀 분석하여 리포트를 작성하세요.
+        당신은 20년 경력의 베테랑 수의사입니다. 제공된 {breed_name}의 사진을 정밀 분석하세요.
         
         [지시 사항]
-        1. 반드시 한국어로 작성할 것.
-        2. BCS(Body Condition Score)를 1~9점 사이로 판정할 것.
-        3. 소견서는 다음 내용을 포함하여 '아주 상세하게' 500자 이상 작성할 것:
-           - 체형 분석 결과 (갈비뼈 촉지 상태 추정, 복부 팽창도 등)
-           - 현재 체중에 따른 건강 위험 요소
-           - 해당 견종 맞춤형 식단 및 운동 제안
-           - 노화 방지를 위한 특별 조언
-        4. 답변 형식은 반드시 아래와 같이 작성하고, 중간에 끊기지 않도록 하세요:
-        Score: [숫자]
-        Opinion: [여기에 상세한 소견 내용을 작성]
+        1. 반드시 한국어로 상세히 작성할 것.
+        2. BCS 점수를 1~9 사이 숫자로 판정할 것.
+        3. 소견 내용에 '**' 또는 '*' 같은 마크다운 기호를 절대 사용하지 마세요. (텍스트로만 작성)
+        4. 소견서는 체형 분석, 건강 위험, 식단/운동 제안을 포함해 500자 이상 아주 길게 작성하세요.
+        5. 반드시 아래 형식을 정확히 지키세요:
+        
+        결과시작
+        점수: [숫자]
+        소견: [상세 내용]
+        결과종료
         """
         
-        # generation_config를 추가하여 충분한 길이를 보장합니다.
+        # 출력 길이를 최대치로 설정 (2048 토큰)
         response = model.generate_content(
             [prompt, side_img, top_img],
             generation_config=genai.types.GenerationConfig(
-                max_output_tokens=1500, # 출력 길이를 넉넉하게 설정
+                max_output_tokens=2048,
                 temperature=0.7,
             )
         )
         res_text = response.text.strip()
         
-        # --- 개선된 파싱 로직 (특수문자 간섭 배제) ---
+        # --- 개선된 파싱 로직 (문자열 슬라이싱 방식) ---
         bcs_val = 5
-        clean_reason = ""
+        clean_reason = "분석 결과를 정리 중입니다."
         
-        if "Score:" in res_text and "Opinion:" in res_text:
-            # 정규표현식으로 숫자만 정확히 추출
-            score_part = res_text.split("Opinion:")[0]
-            bcs_match = re.search(r'\d', score_part)
-            if bcs_match: bcs_val = int(bcs_match.group())
+        try:
+            # 점수 추출
+            if "점수:" in res_text:
+                score_part = res_text.split("점수:")[1].split("\n")[0]
+                bcs_match = re.search(r'\d', score_part)
+                if bcs_match: bcs_val = int(bcs_match.group())
             
-            # Opinion: 이후의 모든 내용을 가져옴
-            clean_reason = res_text.split("Opinion:")[1].strip()
-        else:
-            # 형식이 어긋나도 최대한 내용을 살림
-            clean_reason = res_text
-            bcs_match = re.search(r'\d', res_text)
-            if bcs_match: bcs_val = int(bcs_match.group())
+            # 소견 추출 (키워드 기반 슬라이싱으로 끊김 방지)
+            if "소견:" in res_text:
+                # "소견:" 이후부터 "결과종료" 이전까지 모든 텍스트를 가져옴
+                reason_start = res_text.find("소견:") + 3
+                reason_end = res_text.find("결과종료")
+                if reason_end == -1: # 만약 결과종료가 누락되었다면 끝까지 가져옴
+                    clean_reason = res_text[reason_start:].strip()
+                else:
+                    clean_reason = res_text[reason_start:reason_end].strip()
+            else:
+                clean_reason = res_text # 형식이 틀려도 전체 내용이라도 보여줌
+                
+        except Exception as parse_err:
+            print(f"Parsing Error: {parse_err}")
+            clean_reason = res_text # 파싱 실패 시 원문 그대로 노출
 
         return {"bcs": bcs_val, "reason": clean_reason}
         
     except Exception as e:
         print(f"AI ERROR: {str(e)}")
-        return {"bcs": 5, "reason": f"분석 중 오류가 발생했습니다. (내용: {str(e)[:50]})"}
+        return {"bcs": 5, "reason": f"분석 중 오류가 발생했습니다: {str(e)[:100]}"}
 
 def calculate_pace_of_aging(bcs, breed):
     pace = 1.0 + (abs(5-bcs) * 0.15)
