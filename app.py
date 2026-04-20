@@ -16,10 +16,11 @@ def get_kst_now():
     return datetime.datetime.now(kst)
     
 # --- 1. 시스템 초기화 ---
+# --- 1. 시스템 초기화 (수정 버전) ---
 def init_system():
+    # exist_ok=True 옵션을 추가하여 이미 폴더가 있어도 에러가 나지 않게 합니다.
     for path in ["dataset/multi_view", "reports", "database_images"]:
-        if not os.path.exists(path):
-            os.makedirs(path)
+        os.makedirs(path, exist_ok=True)
     
     conn = sqlite3.connect('pet_analysis.db')
     c = conn.cursor()
