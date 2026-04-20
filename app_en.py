@@ -107,20 +107,45 @@ def analyze_pet_multi_view(side_img_path, top_img_path, breed_name):
     try:
         side_img = Image.open(side_img_path)
         top_img = Image.open(top_img_path)
-        prompt = f"As a professional veterinarian, analyze these photos of a {breed_name}. Provide 'Score / Clinical Opinion' in English. No special characters."
-        response = model.generate_content([prompt, side_img, top_img])
+        
+        prompt = f"""
+        You are a veteran veterinarian. Analyze {breed_name}'s body condition.
+        Write a detailed report in KOREAN.
+        Score: [1~9]
+        Opinion: [Detailed content]
+        END_OF_REPORT
+        """
+        
+        # 신규 라이브러리 호출 방식 (models.generate_content)
+        response = client.models.generate_content(
+            model='gemini-1.5-flash',
+            contents=[prompt, side_img, top_img],
+            config=types.GenerateContentConfig(
+                max_output_tokens=2048,
+                temperature=0.7
+            )
+        )
         res_text = response.text.strip()
-       
-        if '/' in res_text:
-            parts = res_text.split('/')
-            bcs_val = int(re.search(r'\d', parts[0]).group()) if re.search(r'\d', parts[0]) else 5
-            clean_reason = parts[1].strip()
-        else:
-            bcs_match = re.search(r'\d', res_text)
-            bcs_val = int(bcs_match.group()) if bcs_match else 5
-            clean_reason = res_text
+        
+        # --- 파싱 로직 (기존과 동일하게 유지) ---
+        bcs_val = 5
+        clean_reason = res_text
+        
+        score_match = re.search(r'Score:\s*(\d)', res_text)
+        if score_match: bcs_val = int(score_match.group(1))
+        
+        if "Opinion:" in res_text:
+            start_idx = res_text.find("Opinion:") + 8
+            end_idx = res_text.find("END_OF_REPORT")
+            clean_reason = res_text[start_idx:end_idx].strip() if end_idx != -1 else res_text[start_idx:].strip()
+
         return {"bcs": bcs_val, "reason": clean_reason}
-    except: return {"bcs": 5, "reason": "An error occurred during AI analysis."}
+        
+    except Exception as e:
+        # 429 에러 처리 포함
+        if "429" in str(e):
+            return {"bcs": 5, "reason": "API Limit Exceeded. Please try again in 1 minute."}
+        return {"bcs": 5, "reason": f"Error: {str(e)[:50]}"}
 
 def calculate_pace_of_aging(bcs, breed):
     pace = 1.0 + (abs(5-bcs) * 0.15)
