@@ -103,46 +103,49 @@ def analyze_pet_multi_view(side_img_path, top_img_path, breed_name):
         side_img = Image.open(side_img_path)
         top_img = Image.open(top_img_path)
         
+        # 프롬프트: '소견:' 키워드 이후에 모든 내용을 담게 함
         prompt = f"""
-        당신은 20년 경력의 베테랑 수의사입니다. {breed_name}의 사진을 보고 다음 항목을 포함하여 정밀 분석하세요.
-        - 사진 속 개의 체형(BCS) 분석
-        - 건강 위험 및 권장 식단/운동
+        당신은 20년 경력의 베테랑 수의사입니다. {breed_name}의 옆모습과 윗모습을 정밀 분석하세요.
+        반드시 한국어로 '점수'와 '소견'을 구분하여 아주 상세하게(500자 이상) 작성하세요.
+        마크다운(**)은 생략하고 텍스트로만 정중하게 작성하세요.
         
-        반드시 아래의 형식을 엄격히 지켜 한국어로 답변하세요. 마크다운 기호(**)는 쓰지 마세요.
-        
-        점수: [1~9 사이 숫자]
-        소견: [여기에 모든 상세한 분석 내용을 끊김 없이 작성하세요]
+        형식:
+        점수: [숫자]
+        소견: [상세 내용]
         """
         
         response = model.generate_content(
             [prompt, side_img, top_img],
             generation_config=genai.types.GenerationConfig(
-                max_output_tokens=2000,
+                max_output_tokens=2048, # 넉넉하게 설정하여 끊김 방지
                 temperature=0.7
             )
         )
         res_text = response.text.strip()
         
-        # --- 최강 파싱 로직: 정규표현식 사용 ---
         bcs_val = 5
-        clean_reason = res_text # 기본값으로 전체 텍스트 설정
+        clean_reason = res_text
         
-        # 1. 점수 추출 (숫자만 찾기)
+        # 429 에러 등으로 인해 텍스트가 비어있는지 확인
+        if not res_text:
+            return {"bcs": 5, "reason": "AI 응답을 생성하지 못했습니다. API 한도를 확인해 주세요."}
+
+        # 정규표현식 파싱
         score_match = re.search(r'점수:\s*(\d)', res_text)
         if score_match:
             bcs_val = int(score_match.group(1))
         
-        # 2. 소견 추출 ("소견:" 이후의 모든 내용을 끝까지 가져옴)
         if "소견:" in res_text:
-            reason_part = res_text.split("소견:")[1].strip()
-            if reason_part:
-                clean_reason = reason_part
+            clean_reason = res_text.split("소견:")[1].strip()
 
         return {"bcs": bcs_val, "reason": clean_reason}
         
     except Exception as e:
-        print(f"AI ERROR: {str(e)}")
-        return {"bcs": 5, "reason": f"분석 과정에서 오류가 발생했습니다: {str(e)[:100]}"}
+        err_msg = str(e)
+        # 429 에러 발생 시 사용자 친화적인 메시지 출력
+        if "429" in err_msg or "quota" in err_msg.lower():
+            return {"bcs": 5, "reason": "현재 분석 요청이 너무 많아 잠시 서비스가 지연되고 있습니다. 1~2분 후 다시 시도해 주시면 감사하겠습니다."}
+        return {"bcs": 5, "reason": f"분석 중 기술적 오류가 발생했습니다: {err_msg[:50]}"}
 
 def calculate_pace_of_aging(bcs, breed):
     pace = 1.0 + (abs(5-bcs) * 0.15)
