@@ -106,20 +106,58 @@ def analyze_pet_multi_view(side_img_path, top_img_path, breed_name):
     try:
         side_img = Image.open(side_img_path)
         top_img = Image.open(top_img_path)
-        prompt = f"As a professional veterinarian, analyze these photos of a {breed_name}. Provide 'Score / Clinical Opinion' in English. No special characters."
-        response = model.generate_content([prompt, side_img, top_img])
+        
+        # 영문 버전이라도 AI에게 지시는 명확히 한글로 주어 결과를 확실히 제어합니다.
+        # 결과물은 한글로 나오게 설정되어 있습니다.
+        prompt = f"""
+        You are a veteran veterinarian. Analyze the {breed_name}'s body condition.
+        Write a detailed report in KOREAN (한국어).
+        
+        [Rules]
+        1. Score: 1~9 (number only)
+        2. Opinion: Write a very long, detailed professional opinion (at least 700 characters).
+        3. Do NOT use markdown like '**'.
+        4. End your response with the word 'END_OF_REPORT'.
+        
+        Format:
+        Score: [Number]
+        Opinion: [Detailed Content]
+        END_OF_REPORT
+        """
+        
+        response = model.generate_content(
+            [prompt, side_img, top_img],
+            generation_config=genai.types.GenerationConfig(
+                max_output_tokens=2048, # 토큰 부족으로 인한 끊김 방지
+                temperature=0.7
+            )
+        )
         res_text = response.text.strip()
         
-        if '/' in res_text:
-            parts = res_text.split('/')
-            bcs_val = int(re.search(r'\d', parts[0]).group()) if re.search(r'\d', parts[0]) else 5
-            clean_reason = parts[1].strip()
-        else:
-            bcs_match = re.search(r'\d', res_text)
-            bcs_val = int(bcs_match.group()) if bcs_match else 5
-            clean_reason = res_text
+        bcs_val = 5
+        clean_reason = res_text
+        
+        # 정규표현식으로 점수와 소견을 안전하게 추출 (특수문자 간섭 방지)
+        score_match = re.search(r'Score:\s*(\d)', res_text)
+        if score_match: bcs_val = int(score_match.group(1))
+        
+        if "Opinion:" in res_text:
+            # 'Opinion:' 단어 이후부터 'END_OF_REPORT' 전까지 모든 내용을 긁어옴
+            start_idx = res_text.find("Opinion:") + 8
+            end_idx = res_text.find("END_OF_REPORT")
+            if end_idx != -1:
+                clean_reason = res_text[start_idx:end_idx].strip()
+            else:
+                clean_reason = res_text[start_idx:].strip()
+
         return {"bcs": bcs_val, "reason": clean_reason}
-    except: return {"bcs": 5, "reason": "An error occurred during AI analysis."}
+        
+    except Exception as e:
+        err_msg = str(e)
+        # 429 쿼터 에러 대응 문구
+        if "429" in err_msg or "quota" in err_msg.lower():
+            return {"bcs": 5, "reason": "현재 분석 요청이 폭주하여 API 한도를 초과했습니다. 잠시 후 다시 시도해 주세요. (결제 수단 등록이 필요할 수 있습니다.)"}
+        return {"bcs": 5, "reason": f"An error occurred: {err_msg[:50]}"}
 
 def calculate_pace_of_aging(bcs, breed):
     pace = 1.0 + (abs(5-bcs) * 0.15)
