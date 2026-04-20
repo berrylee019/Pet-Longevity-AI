@@ -150,6 +150,11 @@ if "GEMINI_API_KEY" in st.secrets:
     # 모델명 유지 (최신버전 사용 시 gemini-1.5-flash 권장)
     model = genai.GenerativeModel('gemini-2.5-flash')
 
+with st.sidebar:
+    st.image("https://cdn-icons-png.flaticon.com/512/2864/2864248.png", width=60)
+    st.title("MisaTech AI")
+    st.markdown("---")
+    
 st.sidebar.title("🐾 시스템 설정")
 selected_breed = st.sidebar.selectbox("대상 견종 선택", ["리트리버", "말티즈", "푸들", "포메라니안"])
 st.sidebar.divider()
