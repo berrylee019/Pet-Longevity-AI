@@ -129,7 +129,7 @@ def analyze_pet_with_retry(client, side_img_path, top_img_path, breed_name, max_
             try:
                 # 최신 SDK(google-genai) 호출 방식
                 response = client.models.generate_content(
-                    model="gemini-1.5-flash",
+                    model="gemini-2.5-flash",
                     contents=[prompt, side_img, top_img]
                 )
                 res_text = response.text.strip()
