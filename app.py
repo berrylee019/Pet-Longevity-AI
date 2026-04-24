@@ -1,5 +1,5 @@
 import streamlit as st
-import google.generativeai as genai
+from google import genai  # 최신 SDK 방식
 import os
 import sqlite3
 import datetime
