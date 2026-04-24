@@ -16,7 +16,7 @@ def safe_init_genai():
         api_key = st.secrets["GEMINI_API_KEY"]
         genai.configure(api_key=api_key)
         # 모델명을 명확히 지정하여 404 방지
-        return genai.GenerativeModel('gemini-1.5-flash')
+        return genai.GenerativeModel('gemini-2.5-flash')
     except Exception as e:
         st.error(f"GenAI Configuration Error: {e}")
         return None
