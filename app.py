@@ -9,6 +9,9 @@ import time
 from PIL import Image
 from fpdf import FPDF
 
+# [필수] 1순위: 페이지 설정을 가장 먼저 실행해야 에러가 나지 않습니다.
+st.set_page_config(page_title="Pet Longevity AI", layout="wide")
+
 # --- 1. 시스템 초기화 및 모델 캐싱 ---
 def init_system():
     for path in ["dataset/multi_view", "reports", "database_images"]:
@@ -25,7 +28,7 @@ def init_system():
 def get_ai_client():
     try:
         api_key = st.secrets["GEMINI_API_KEY"]
-        # 최신 SDK는 Client 객체를 생성하여 사용합니다.
+        # 최신 SDK는 Client 객체를 사용합니다.
         client = genai.Client(api_key=api_key)
         return client
     except Exception as e:
@@ -58,7 +61,7 @@ def create_pdf_report(breed, bcs, pace, reason):
         pdf = PetReportPDF()
         pdf.set_auto_page_break(auto=False, margin=0)
         
-        # 폰트 경로 확인 (형님, 서버에 이 폰트 파일이 있어야 합니다)
+        # 서버에 나눔고딕 폰트가 있는지 확인
         font_path = "NanumGothicBold.ttf"
         if os.path.exists(font_path):
             pdf.add_font('NanumGothic', 'B', font_path, uni=True)
@@ -108,7 +111,7 @@ def create_pdf_report(breed, bcs, pace, reason):
         st.error(f"PDF 생성 오류: {e}")
         return None
 
-# --- 3. AI 분석 로직 (최신 SDK 문법 적용) ---
+# --- 3. AI 분석 로직 (재시도 및 에러 처리) ---
 def analyze_pet_with_retry(client, side_img_path, top_img_path, breed_name, max_retries=3):
     if client is None:
         return {"bcs": 5, "reason": "AI 클라이언트 로드 실패."}
@@ -127,9 +130,8 @@ def analyze_pet_with_retry(client, side_img_path, top_img_path, breed_name, max_
 
         for i in range(max_retries):
             try:
-                # 최신 SDK(google-genai) 호출 방식
                 response = client.models.generate_content(
-                    model="gemini-2.5-flash",
+                    model="gemini-1.5-flash",
                     contents=[prompt, side_img, top_img]
                 )
                 res_text = response.text.strip()
@@ -144,7 +146,7 @@ def analyze_pet_with_retry(client, side_img_path, top_img_path, breed_name, max_
 
             except Exception as e:
                 if "429" in str(e):
-                    time.sleep((i + 1) * 2)
+                    time.sleep((i + 1) * 3)
                     continue
                 raise e
     except Exception as e:
@@ -157,9 +159,7 @@ def calculate_pace_of_aging(bcs, breed):
     if breed == "리트리버": pace *= 1.15
     return round(pace, 2)
 
-# --- 4. Streamlit UI ---
-st.set_page_config(page_title="Pet Longevity AI", layout="wide")
-
+# --- 4. Streamlit UI 구성 ---
 with st.sidebar:
     st.title("MisaTech AI")
     selected_breed = st.selectbox("대상 견종", ["리트리버", "말티즈", "푸들", "포메라니안"])
@@ -171,8 +171,8 @@ tabs = st.tabs(["🔍 정밀 분석 및 PDF", "📊 데이터 센터"])
 with tabs[0]:
     st.header("🐶 AI 수의사 노화 정밀 진단")
     c1, c2 = st.columns(2)
-    with c1: side_f = st.file_uploader("옆모습", type=['jpg', 'png'], key="side")
-    with c2: top_f = st.file_uploader("윗모습", type=['jpg', 'png'], key="top")
+    with c1: side_f = st.file_uploader("옆모습 업로드", type=['jpg', 'png'], key="side")
+    with c2: top_f = st.file_uploader("윗모습 업로드", type=['jpg', 'png'], key="top")
     
     if st.button("🧠 분석 실행", use_container_width=True, type="primary"):
         if side_f and top_f:
@@ -181,7 +181,7 @@ with tabs[0]:
             with open(s_p, "wb") as f: f.write(side_f.getbuffer())
             with open(t_p, "wb") as f: f.write(top_f.getbuffer())
             
-            with st.spinner("AI 수의사가 사진을 분석 중입니다..."):
+            with st.spinner("AI 수의사가 사진을 정밀 분석 중입니다..."):
                 res = analyze_pet_with_retry(client, s_p, t_p, selected_breed)
                 pace = calculate_pace_of_aging(res["bcs"], selected_breed)
                 
@@ -189,28 +189,31 @@ with tabs[0]:
                 
                 pdf_p = create_pdf_report(selected_breed, res["bcs"], pace, res["reason"])
                 
-                # DB 로그 기록
-                try:
-                    conn = sqlite3.connect('pet_analysis.db')
-                    conn.cursor().execute("INSERT INTO analysis_logs (breed, bcs, pace, reason, date) VALUES (?,?,?,?,?)",
-                                         (selected_breed, res["bcs"], pace, res["reason"], get_kst_now().strftime('%Y-%m-%d %H:%M')))
-                    conn.commit()
-                    conn.close()
-                except: pass
-
                 if pdf_p:
                     with open(pdf_p, "rb") as f:
                         st.download_button("📄 PDF 진단서 다운로드", f, file_name=f"Report_{selected_breed}.pdf", use_container_width=True)
+                    
+                    # 로그 기록
+                    try:
+                        conn = sqlite3.connect('pet_analysis.db')
+                        conn.cursor().execute("INSERT INTO analysis_logs (breed, bcs, pace, reason, date) VALUES (?,?,?,?,?)",
+                                             (selected_breed, res["bcs"], pace, res["reason"], get_kst_now().strftime('%Y-%m-%d %H:%M')))
+                        conn.commit()
+                        conn.close()
+                    except: pass
         else:
-            st.warning("옆모습과 윗모습 사진을 모두 업로드해주세요.")
+            st.warning("사진을 모두 업로드해주세요.")
 
 if is_admin:
     with tabs[1]:
-        st.subheader("📊 분석 로그 데이터")
-        conn = sqlite3.connect('pet_analysis.db')
-        df = pd.read_sql_query("SELECT * FROM analysis_logs ORDER BY id DESC", conn)
-        st.dataframe(df, use_container_width=True)
-        conn.close()
+        st.subheader("📊 분석 로그")
+        try:
+            conn = sqlite3.connect('pet_analysis.db')
+            df = pd.read_sql_query("SELECT * FROM analysis_logs ORDER BY id DESC", conn)
+            st.dataframe(df, use_container_width=True)
+            conn.close()
+        except:
+            st.write("아직 기록된 로그가 없습니다.")
 
 st.divider()
-st.caption("문의 사항: bslee@yahoo.com")
+st.caption("문의: bslee@yahoo.com")
