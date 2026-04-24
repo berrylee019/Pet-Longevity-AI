@@ -48,7 +48,7 @@ def load_gemini_model(api_key):
     try:
         genai.configure(api_key=api_key)
         # 404 에러 방지를 위해 가장 표준적인 모델명 사용
-        model = genai.GenerativeModel('gemini-1.5-flash')
+        model = genai.GenerativeModel('gemini-2.5-flash')
         return model
     except Exception as e:
         st.error(f"모델 로드 중 오류 발생: {e}")
