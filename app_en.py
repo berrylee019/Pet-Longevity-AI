@@ -10,6 +10,9 @@ from PIL import Image
 from fpdf import FPDF
 from icrawler.builtin import BingImageCrawler, GoogleImageCrawler, BaiduImageCrawler
 
+# [중요] 모든 Streamlit 함수 중 가장 처음에 위치해야 합니다!
+st.set_page_config(page_title="Pet Longevity AI", layout="wide")
+
 # --- 1. 최신 SDK 기반 AI 클라이언트 초기화 ---
 @st.cache_resource
 def get_ai_client():
