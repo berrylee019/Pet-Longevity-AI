@@ -155,7 +155,7 @@ def calculate_pace_of_aging(bcs, breed):
     return round(pace, 2)
 
 # --- 5. Streamlit UI ---
-st.set_page_config(page_title="Pet Longevity AI", layout="wide")
+#st.set_page_config(page_title="Pet Longevity AI", layout="wide")
 
 st.sidebar.title("🐾 System Config")
 selected_breed = st.sidebar.selectbox("Target Breed", ["Retriever", "Maltese", "Poodle", "Pomeranian", "Others"])
