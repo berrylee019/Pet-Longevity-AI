@@ -125,6 +125,9 @@ def analyze_pet_multi_view(side_img_path, top_img_path, breed_name):
     if client is None:
         return {"bcs": 5, "reason": "AI Client not initialized."}
         
+    # 최대 3번까지 재시도하는 로직 추가
+    for attempt in range(3):
+        
     try:
         side_img = Image.open(side_img_path)
         top_img = Image.open(top_img_path)
@@ -147,7 +150,13 @@ def analyze_pet_multi_view(side_img_path, top_img_path, breed_name):
             clean_reason = res_text
         return {"bcs": bcs_val, "reason": clean_reason}
     except Exception as e: 
-        return {"bcs": 5, "reason": f"AI Analysis Error: {str(e)[:50]}"}
+        if "429" in str(e):
+            # 429 에러 발생 시 5초간 대기 후 재시도
+            time.sleep(5)
+            continue
+        return {"bcs": 5, "reason": f"AI Error: {str(e)[:50]}"}
+
+return {"bcs": 5, "reason": "Server busy. Please try again in 1 minute."}
 
 def calculate_pace_of_aging(bcs, breed):
     pace = 1.0 + (abs(5-bcs) * 0.15)
