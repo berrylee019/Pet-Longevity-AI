@@ -3,11 +3,25 @@ import google.generativeai as genai
 import os
 import sqlite3
 import datetime
+import time
 import re
 import pandas as pd
 from PIL import Image
 from fpdf import FPDF
 from icrawler.builtin import BingImageCrawler, GoogleImageCrawler, BaiduImageCrawler
+
+# [수정] 모델 로드 부분을 좀 더 명확하게 선언
+def safe_init_genai():
+    try:
+        api_key = st.secrets["GEMINI_API_KEY"]
+        genai.configure(api_key=api_key)
+        # 모델명을 명확히 지정하여 404 방지
+        return genai.GenerativeModel('gemini-1.5-flash')
+    except Exception as e:
+        st.error(f"GenAI Configuration Error: {e}")
+        return None
+
+model = safe_init_genai()
 
 # --- Timezone Logic (Kept KST for consistency in logs) ---
 def get_kst_now():
