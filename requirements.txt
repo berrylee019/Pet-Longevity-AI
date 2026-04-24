@@ -2,7 +2,7 @@ streamlit
 icrawler
 torch
 torchvision
-google-generativeai
+google-generativeai>=0.5.0
 Pillow
 fpdf
 google-genai
