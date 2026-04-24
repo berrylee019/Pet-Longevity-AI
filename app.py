@@ -5,9 +5,9 @@ import sqlite3
 import datetime
 import re
 import pandas as pd
+import time  # 재시도 대기 시간을 위해 추가
 from PIL import Image
 from fpdf import FPDF
-from icrawler.builtin import BingImageCrawler, GoogleImageCrawler, BaiduImageCrawler
 import traceback
 
 # --- 한국 시간(KST) 설정 ---
@@ -15,7 +15,7 @@ def get_kst_now():
     kst = datetime.timezone(datetime.timedelta(hours=9))
     return datetime.datetime.now(kst)
 
-# --- 1. 시스템 초기화 ---
+# --- 1. 시스템 초기화 및 모델 캐싱 ---
 def init_system():
     for path in ["dataset/multi_view", "reports", "database_images"]:
         os.makedirs(path, exist_ok=True)
@@ -29,9 +29,15 @@ def init_system():
     conn.commit()
     conn.close()
 
+@st.cache_resource
+def load_gemini_model(api_key):
+    genai.configure(api_key=api_key)
+    # 가장 빠르고 효율적인 1.5-flash 모델 권장
+    return genai.GenerativeModel('gemini-1.5-flash')
+
 init_system()
 
-# --- 2. PDF 생성 로직 (1페이지 고정 및 폰트 에러 방지) ---
+# --- 2. PDF 생성 로직 (최적화) ---
 class PetReportPDF(FPDF):
     def header(self):
         header_img = "card_bg1.png"
@@ -39,7 +45,7 @@ class PetReportPDF(FPDF):
             self.image(header_img, x=10, y=10, w=190)
             self.ln(32)
         else:
-            self.set_font('Arial', 'B', 20)
+            self.set_font('Helvetica', 'B', 20)
             self.cell(0, 15, 'Pet Health Report', ln=True, align='C')
             self.ln(5)
 
@@ -50,7 +56,7 @@ def create_pdf_report(breed, bcs, pace, reason):
         
         font_path = "NanumGothicBold.ttf"
         if not os.path.exists(font_path): return None
-        # 폰트 경고 방지를 위해 uni=True 설정 유지
+        
         pdf.add_font('NanumGothic', 'B', font_path, uni=True)
         pdf.add_page()
         
@@ -94,58 +100,55 @@ def create_pdf_report(breed, bcs, pace, reason):
         pdf.output(report_path)
         return report_path
     except Exception as e:
-        print(f"PDF ERROR: {e}")
+        st.error(f"PDF 생성 중 오류: {e}")
         return None
 
-# --- 3. AI 분석 로직 (끊김 방지 정규표현식 적용) ---
-def analyze_pet_multi_view(side_img_path, top_img_path, breed_name):
-    try:
-        side_img = Image.open(side_img_path)
-        top_img = Image.open(top_img_path)
-        
-        # 프롬프트: '소견:' 키워드 이후에 모든 내용을 담게 함
-        prompt = f"""
-        당신은 20년 경력의 베테랑 수의사입니다. {breed_name}의 옆모습과 윗모습을 정밀 분석하세요.
-        반드시 한국어로 '점수'와 '소견'을 구분하여 아주 상세하게(500자 이상) 작성하세요.
-        마크다운(**)은 생략하고 텍스트로만 정중하게 작성하세요.
-        
-        형식:
-        점수: [숫자]
-        소견: [상세 내용]
-        """
-        
-        response = model.generate_content(
-            [prompt, side_img, top_img],
-            generation_config=genai.types.GenerationConfig(
-                max_output_tokens=2048, # 넉넉하게 설정하여 끊김 방지
-                temperature=0.7
+# --- 3. AI 분석 로직 (자동 재시도 및 오류 처리 강화) ---
+def analyze_pet_with_retry(model, side_img_path, top_img_path, breed_name, max_retries=3):
+    side_img = Image.open(side_img_path)
+    top_img = Image.open(top_img_path)
+    
+    prompt = f"""
+    당신은 20년 경력의 베테랑 수의사입니다. {breed_name}의 옆모습과 윗모습을 정밀 분석하세요.
+    반드시 한국어로 '점수'와 '소견'을 구분하여 아주 상세하게(500자 이상) 작성하세요.
+    마크다운(**)은 생략하고 텍스트로만 정중하게 작성하세요.
+    
+    형식:
+    점수: [숫자]
+    소견: [상세 내용]
+    """
+
+    for i in range(max_retries):
+        try:
+            response = model.generate_content(
+                [prompt, side_img, top_img],
+                generation_config=genai.types.GenerationConfig(
+                    max_output_tokens=2048,
+                    temperature=0.7
+                )
             )
-        )
-        res_text = response.text.strip()
-        
-        bcs_val = 5
-        clean_reason = res_text
-        
-        # 429 에러 등으로 인해 텍스트가 비어있는지 확인
-        if not res_text:
-            return {"bcs": 5, "reason": "AI 응답을 생성하지 못했습니다. API 한도를 확인해 주세요."}
+            res_text = response.text.strip()
+            
+            # 파싱 로직
+            bcs_val = 5
+            score_match = re.search(r'점수:\s*(\d)', res_text)
+            if score_match:
+                bcs_val = int(score_match.group(1))
+            
+            clean_reason = res_text.split("소견:")[1].strip() if "소견:" in res_text else res_text
+            
+            return {"bcs": bcs_val, "reason": clean_reason}
 
-        # 정규표현식 파싱
-        score_match = re.search(r'점수:\s*(\d)', res_text)
-        if score_match:
-            bcs_val = int(score_match.group(1))
-        
-        if "소견:" in res_text:
-            clean_reason = res_text.split("소견:")[1].strip()
-
-        return {"bcs": bcs_val, "reason": clean_reason}
-        
-    except Exception as e:
-        err_msg = str(e)
-        # 429 에러 발생 시 사용자 친화적인 메시지 출력
-        if "429" in err_msg or "quota" in err_msg.lower():
-            return {"bcs": 5, "reason": "현재 분석 요청이 너무 많아 잠시 서비스가 지연되고 있습니다. 1~2분 후 다시 시도해 주시면 감사하겠습니다."}
-        return {"bcs": 5, "reason": f"분석 중 기술적 오류가 발생했습니다: {err_msg[:50]}"}
+        except Exception as e:
+            err_msg = str(e)
+            if "429" in err_msg or "quota" in err_msg.lower():
+                if i < max_retries - 1:
+                    wait_time = (i + 1) * 2 # 2초, 4초 대기 후 재시도
+                    time.sleep(wait_time)
+                    continue
+                else:
+                    return {"bcs": 5, "reason": "현재 API 할당량이 초과되었습니다. 약 1분 후 다시 시도해 주세요."}
+            return {"bcs": 5, "reason": f"분석 중 오류 발생: {err_msg[:100]}"}
 
 def calculate_pace_of_aging(bcs, breed):
     pace = 1.0 + (abs(5-bcs) * 0.15)
@@ -155,22 +158,23 @@ def calculate_pace_of_aging(bcs, breed):
 # --- 4. Streamlit UI ---
 st.set_page_config(page_title="Pet Longevity AI", layout="wide")
 
+# API 키 및 모델 로드
 if "GEMINI_API_KEY" in st.secrets:
-    genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-    model = genai.GenerativeModel('gemini-2.5-flash')
+    model = load_gemini_model(st.secrets["GEMINI_API_KEY"])
 else:
-    st.error("API Key not found!")
+    st.error("API Key를 찾을 수 없습니다. Secrets 설정을 확인해 주세요.")
+    st.stop()
 
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/2864/2864248.png", width=60)
     st.title("MisaTech AI")
     st.markdown("---")
     
-st.sidebar.title("🐾 시스템 설정")
-selected_breed = st.sidebar.selectbox("대상 견종 선택", ["리트리버", "말티즈", "푸들", "포메라니안"])
-st.sidebar.divider()
-admin_pass = st.sidebar.text_input("관리자 비번", type="password")
-is_admin = (admin_pass == "2004")
+    st.title("🐾 시스템 설정")
+    selected_breed = st.selectbox("대상 견종 선택", ["리트리버", "말티즈", "푸들", "포메라니안"])
+    st.divider()
+    admin_pass = st.text_input("관리자 비번", type="password")
+    is_admin = (admin_pass == "2004")
 
 tabs = st.tabs(["🔍 정밀 분석 및 PDF"] + (["🌐 데이터 센터"] if is_admin else []))
 
@@ -179,18 +183,19 @@ with tabs[0]:
     st.divider()
     
     c1, c2 = st.columns(2)
-    with c1: side_f = st.file_uploader("옆모습 업로드", type=['jpg', 'jpeg', 'png'])
-    with c2: top_f = st.file_uploader("윗모습 업로드", type=['jpg', 'jpeg', 'png'])
+    with c1: side_f = st.file_uploader("옆모습 업로드", type=['jpg', 'jpeg', 'png'], key="side")
+    with c2: top_f = st.file_uploader("윗모습 업로드", type=['jpg', 'jpeg', 'png'], key="top")
     
-    if st.button("🧠 분석 실행 및 리포트 생성", width='stretch'):
+    if st.button("🧠 분석 실행 및 리포트 생성", use_container_width=True):
         if side_f and top_f:
             t_stamp = get_kst_now().strftime("%Y%m%d_%H%M%S")
             s_p, t_p = f"database_images/{t_stamp}_s.png", f"database_images/{t_stamp}_t.png"
+            
             with open(s_p, "wb") as f: f.write(side_f.getbuffer())
             with open(t_p, "wb") as f: f.write(top_f.getbuffer())
             
-            with st.spinner("AI 분석 중입니다. 잠시만 기다려 주세요..."):
-                res = analyze_pet_multi_view(s_p, t_p, selected_breed)
+            with st.spinner("AI가 사진을 분석하고 있습니다. (최대 10초 소요)"):
+                res = analyze_pet_with_retry(model, s_p, t_p, selected_breed)
                 pace = calculate_pace_of_aging(res["bcs"], selected_breed)
                 
                 st.subheader("📋 AI 분석 소견")
@@ -199,16 +204,21 @@ with tabs[0]:
                 pdf_p = create_pdf_report(selected_breed, res["bcs"], pace, res["reason"])
                 if pdf_p:
                     with open(pdf_p, "rb") as f:
-                        st.download_button("📄 PDF 진단서 다운로드", f, file_name=f"Report_{selected_breed}.pdf", width='stretch')
+                        st.download_button("📄 PDF 진단서 다운로드", f, 
+                                         file_name=f"Report_{selected_breed}_{t_stamp}.pdf", 
+                                         use_container_width=True)
                 
-                # 로그 기록
-                conn = sqlite3.connect('pet_analysis.db')
-                conn.cursor().execute("INSERT INTO analysis_logs (breed, bcs, pace, reason, date) VALUES (?,?,?,?,?)",
-                                      (selected_breed, res["bcs"], pace, res["reason"], get_kst_now().strftime('%Y-%m-%d %H:%M')))
-                conn.commit()
-                conn.close()
+                # 로그 저장
+                try:
+                    conn = sqlite3.connect('pet_analysis.db')
+                    conn.cursor().execute("INSERT INTO analysis_logs (breed, bcs, pace, reason, date) VALUES (?,?,?,?,?)",
+                                          (selected_breed, res["bcs"], pace, res["reason"], get_kst_now().strftime('%Y-%m-%d %H:%M')))
+                    conn.commit()
+                    conn.close()
+                except:
+                    pass
         else:
-            st.warning("사진을 모두 업로드해주세요.")
+            st.warning("옆모습과 윗모습 사진을 모두 업로드해주세요.")
 
 st.divider()
-st.caption("비즈니스 문의: bslee@yahoo.com")
+st.caption("비즈니스 문의: bslee@yahoo.com | Powered by MisaTech SUROP")
