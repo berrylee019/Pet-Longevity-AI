@@ -132,7 +132,7 @@ def analyze_pet_multi_view(side_img_path, top_img_path, breed_name):
         
         # 최신 SDK: client.models.generate_content 방식
         response = client.models.generate_content(
-            model="gemini-1.5-flash", # gemini-2.5는 아직 없으므로 안정적인 1.5-flash 사용
+            model="gemini-2.5-flash", # gemini-2.5는 아직 없으므로 안정적인 1.5-flash 사용
             contents=[prompt, side_img, top_img]
         )
         res_text = response.text.strip()
