@@ -128,35 +128,35 @@ def analyze_pet_multi_view(side_img_path, top_img_path, breed_name):
     # 최대 3번까지 재시도하는 로직 추가
     for attempt in range(3):
         
-    try:
-        side_img = Image.open(side_img_path)
-        top_img = Image.open(top_img_path)
-        prompt = f"As a professional veterinarian, analyze these photos of a {breed_name}. Provide 'Score / Clinical Opinion' in English. No special characters."
-        
-        # 최신 SDK: client.models.generate_content 방식
-        response = client.models.generate_content(
-            model="gemini-2.5-flash", # gemini-2.5는 아직 없으므로 안정적인 1.5-flash 사용
-            contents=[prompt, side_img, top_img]
-        )
-        res_text = response.text.strip()
-        
-        if '/' in res_text:
-            parts = res_text.split('/')
-            bcs_val = int(re.search(r'\d', parts[0]).group()) if re.search(r'\d', parts[0]) else 5
-            clean_reason = parts[1].strip()
-        else:
-            bcs_match = re.search(r'\d', res_text)
-            bcs_val = int(bcs_match.group()) if bcs_match else 5
-            clean_reason = res_text
-        return {"bcs": bcs_val, "reason": clean_reason}
-    except Exception as e: 
-        if "429" in str(e):
-            # 429 에러 발생 시 5초간 대기 후 재시도
-            time.sleep(5)
-            continue
-        return {"bcs": 5, "reason": f"AI Error: {str(e)[:50]}"}
-
-return {"bcs": 5, "reason": "Server busy. Please try again in 1 minute."}
+        try:
+            side_img = Image.open(side_img_path)
+            top_img = Image.open(top_img_path)
+            prompt = f"As a professional veterinarian, analyze these photos of a {breed_name}. Provide 'Score / Clinical Opinion' in English. No special characters."
+            
+            # 최신 SDK: client.models.generate_content 방식
+            response = client.models.generate_content(
+                model="gemini-2.5-flash", # gemini-2.5는 아직 없으므로 안정적인 1.5-flash 사용
+                contents=[prompt, side_img, top_img]
+            )
+            res_text = response.text.strip()
+            
+            if '/' in res_text:
+                parts = res_text.split('/')
+                bcs_val = int(re.search(r'\d', parts[0]).group()) if re.search(r'\d', parts[0]) else 5
+                clean_reason = parts[1].strip()
+            else:
+                bcs_match = re.search(r'\d', res_text)
+                bcs_val = int(bcs_match.group()) if bcs_match else 5
+                clean_reason = res_text
+            return {"bcs": bcs_val, "reason": clean_reason}
+        except Exception as e: 
+            if "429" in str(e):
+                # 429 에러 발생 시 5초간 대기 후 재시도
+                time.sleep(5)
+                continue
+            return {"bcs": 5, "reason": f"AI Error: {str(e)[:50]}"}
+    
+    return {"bcs": 5, "reason": "Server busy. Please try again in 1 minute."}
 
 def calculate_pace_of_aging(bcs, breed):
     pace = 1.0 + (abs(5-bcs) * 0.15)
