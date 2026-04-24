@@ -46,7 +46,7 @@ def init_system():
 @st.cache_resource
 def load_gemini_model(api_key):
     try:
-        genai.configure(api_key=api_key)
+        genai.Client(api_key=api_key)
         # 404 에러 방지를 위해 가장 표준적인 모델명 사용
         model = genai.GenerativeModel('gemini-2.5-flash')
         return model
