@@ -33,7 +33,7 @@ def init_system():
 def load_gemini_model(api_key):
     genai.configure(api_key=api_key)
     # 가장 빠르고 효율적인 1.5-flash 모델 권장
-    return genai.GenerativeModel('gemini-1.5-flash')
+    return genai.GenerativeModel('gemini-2.5-flash')
 
 init_system()
 
