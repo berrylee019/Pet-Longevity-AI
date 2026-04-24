@@ -9,6 +9,22 @@ import time
 from PIL import Image
 from fpdf import FPDF
 import traceback
+import subprocess
+import sys
+
+# 라이브러리 버전 강제 업데이트 로직
+def upgrade_library():
+    try:
+        import google.generativeai as genai
+        # 버전 체크 (예: 0.5.0 미만이면 업데이트)
+        if float('.'.join(genai.__version__.split('.')[:2])) < 0.5:
+            raise ImportError
+    except (ImportError, AttributeError):
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "-U", "google-generativeai"])
+        st.rerun() # 업데이트 후 앱 재실행
+
+# 실행 (한 번 업데이트되면 다음부터는 건너뜁니다)
+# upgrade_library()
 
 # --- 한국 시간(KST) 설정 ---
 def get_kst_now():
