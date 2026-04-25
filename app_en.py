@@ -158,7 +158,8 @@ st.title("🐾 Pet Longevity AI (Global)")
 
 with st.sidebar:
     st.header("Settings")
-    breed = st.selectbox("Select Breed", ["Retriever", "Maltese", "Poodle", "Pomeranian"])
+    breed = st.selectbox("Select Breed", ["Retriever", "Maltese", "Poodle", "Pomeranian","King Charles Spaniel", 
+    "German Shepherd"])
     admin_code = st.text_input("Admin Code", type="password")
 
 t1, t2 = st.tabs(["Diagnosis", "Data Logs"])
