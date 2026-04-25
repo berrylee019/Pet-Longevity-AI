@@ -103,50 +103,38 @@ def analyze_pet_vision(side_path, top_path, breed, max_retries=3):
         # i 반복문 시작
         for attempt in range(max_retries):
             try:
-                response = client.models.generate_content(
-                    model="gemini-1.5-flash", # 또는 "models/gemini-1.5-flash"
-                    contents=[prompt, side_img, top_img]
-                )
-            except Exception as e:
-                if "404" in str(e):
-                    # 1.5-flash가 안되면 1.5-pro로 한 번 더 찔러보기
-                    response = client.models.generate_content(
-                        model="gemini-1.5-pro",
-                        contents=[prompt, side_img, top_img]
-                    )
-                text = response.text
+                # [해결책] 모델명을 리스트로 만들어 하나씩 찔러봅니다.
+                # 1.5-flash가 안 되면 1.5-flash-latest로, 그것도 안 되면 pro로 시도합니다.
+                model_candidates = ["gemini-1.5-flash", "gemini-1.5-flash-latest", "gemini-1.5-pro"]
                 
-                # 2. 결과 파싱 (성공 시 데이터 업데이트)
+                success = False
+                for model_name in model_candidates:
+                    try:
+                        response = client.models.generate_content(
+                            model=model_name,
+                            contents=[prompt, side_img, top_img]
+                        )
+                        text = response.text
+                        success = True
+                        break # 성공하면 루프 탈출
+                    except Exception as inner_e:
+                        if "404" in str(inner_e):
+                            continue # 404면 다음 모델명으로 시도
+                        else:
+                            raise inner_e # 429 등 다른 에러면 상위 try로 전달
+                
+                if not success:
+                    raise Exception("All model variants failed with 404.")
+
+                # 결과 파싱 로직 (기존과 동일)
                 score = 5
                 match = re.search(r'Score:\s*(\d)', text)
                 if match: score = int(match.group(1))
-                
                 opinion = text.split("Opinion:")[1].strip() if "Opinion:" in text else text
                 
                 result["bcs"] = score
                 result["opinion"] = opinion
-                return result # 성공 시 즉시 반환
-
-            except Exception as e:
-                err_msg = str(e).upper()
-                if "429" in err_msg:
-                    wait_time = (attempt + 1) * 15
-                    st.warning(f"Quota exceeded. Retrying in {wait_time}s... ({attempt+1}/{max_retries})")
-                    time.sleep(wait_time)
-                    continue
-                elif "404" in err_msg:
-                    # 404 에러 시 모델명을 조정해 보지만, 기본적으로 result는 유지
-                    st.error("Model not found. Please check your API project settings.")
-                    break # 404는 기다려도 해결되지 않으므로 중단
-                else:
-                    result["opinion"] = f"AI Error: {str(e)[:50]}"
-                    break
-
-    except Exception as e:
-        result["opinion"] = f"System Error: {str(e)[:50]}"
-    
-    # 3. 모든 시도가 실패해도 반드시 딕셔너리 구조를 반환하여 154번 라인 에러 방지
-    return result
+                return result
 
 # --- 4. Main UI ---
 st.title("🐾 Pet Longevity AI (Global)")
