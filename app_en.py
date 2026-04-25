@@ -103,11 +103,17 @@ def analyze_pet_vision(side_path, top_path, breed, max_retries=3):
         # i 반복문 시작
         for attempt in range(max_retries):
             try:
-                # [중요] 모델명을 'gemini-1.5-flash'로 확실하게 고정
                 response = client.models.generate_content(
-                    model="gemini-1.5-flash",
+                    model="gemini-1.5-flash", # 또는 "models/gemini-1.5-flash"
                     contents=[prompt, side_img, top_img]
                 )
+            except Exception as e:
+                if "404" in str(e):
+                    # 1.5-flash가 안되면 1.5-pro로 한 번 더 찔러보기
+                    response = client.models.generate_content(
+                        model="gemini-1.5-pro",
+                        contents=[prompt, side_img, top_img]
+                    )
                 text = response.text
                 
                 # 2. 결과 파싱 (성공 시 데이터 업데이트)
