@@ -96,26 +96,27 @@ def analyze_pet_vision(side_path, top_path, breed, max_retries=2):
         Opinion: [Detailed explanation in English]
         """
 
-        for attempt in range(max_retries):
-                    try:
-                        response = client.models.generate_content(
-                            model="gemini-1.5-flash",
-                            contents=[prompt, side_img, top_img]
-                        )
-                        # ... 결과 파싱 로직 ...
-                        return {"bcs": score, "opinion": opinion}
-                        
-                    except Exception as e:
-                        err_msg = str(e)
-                        if "429" in err_msg:
-                            # [핵심] 재시도할수록 대기 시간을 5초, 10초, 15초로 늘립니다.
-                            wait_time = (attempt + 1) * 5
-                            st.warning(f"서버 혼잡으로 {wait_time}초 후 다시 시도합니다... (시도 {attempt + 1}/{max_retries})")
-                            time.sleep(wait_time)
-                            continue
-                        raise e
-            except Exception as e:
+        # i 반복문 시작
+        for i in range(max_retries + 1):
+            try: # <--- 여기서부터 들여쓰기 시작
+                response = client.models.generate_content(
+                    model="gemini-1.5-flash",
+                    contents=[prompt, side_img, top_img]
+                )
+                text = response.text
+                
+                # 결과 파싱 로직 (생략)
+                return {"bcs": 5, "opinion": text}
+                
+            except Exception as e: # <--- [중요] 위의 try와 수직으로 줄이 딱 맞아야 함!
+                if "429" in str(e) and i < max_retries:
+                    time.sleep(5)
+                    continue
+                # 재시도 실패 시 에러 반환
                 return {"bcs": 5, "opinion": f"AI Error: {str(e)[:100]}"}
+
+    except Exception as e: # <--- 이 부분은 함수 전체의 에러를 잡는 try와 맞아야 함
+        return {"bcs": 5, "opinion": f"File Error: {str(e)[:100]}"}
 
 # --- 4. Main UI ---
 st.title("🐾 Pet Longevity AI (Global)")
