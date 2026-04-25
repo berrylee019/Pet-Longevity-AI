@@ -162,7 +162,7 @@ def calculate_pace_of_aging(bcs, breed):
 # --- 4. Streamlit UI 구성 ---
 with st.sidebar:
     st.title("MisaTech AI")
-    selected_breed = st.selectbox("대상 견종", ["리트리버", "말티즈", "푸들", "포메라니안"])
+    selected_breed = st.selectbox("대상 견종", ["리트리버", "말티즈", "푸들", "포메라니안", "킹 찰스 스패니얼", "저먼 쉐퍼드"])
     admin_pass = st.text_input("관리자 비번", type="password")
     is_admin = (admin_pass == "2004")
 
