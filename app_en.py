@@ -104,7 +104,7 @@ def analyze_pet_vision(side_path, top_path, breed, max_retries=3):
         for attempt in range(max_retries):
             try:
                 # [404 방어] 후보 모델명을 순차적으로 테스트
-                model_names = ["gemini-1.5-flash", "gemini-1.5-flash-latest", "gemini-1.5-pro"]
+                model_names = ["models/gemini-1.5-flash", "models/gemini-1.5-flash-latest", "models/gemini-1.5-pro"]
                 text = ""
                 success = False
 
