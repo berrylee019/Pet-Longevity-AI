@@ -100,7 +100,7 @@ def analyze_pet_vision(side_path, top_path, breed, max_retries=2):
         for i in range(max_retries + 1):
             try: # <--- 여기서부터 들여쓰기 시작
                 response = client.models.generate_content(
-                    model="gemini-1.5-flash",
+                    model="gemini-2.5-flash",
                     contents=[prompt, side_img, top_img]
                 )
                 text = response.text
