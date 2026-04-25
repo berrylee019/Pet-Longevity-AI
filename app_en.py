@@ -96,29 +96,26 @@ def analyze_pet_vision(side_path, top_path, breed, max_retries=2):
         Opinion: [Detailed explanation in English]
         """
 
-        for attempt in range(max_retries + 1):
-            try:
-                # FIXED: Use client.models.generate_content instead of GenerativeModel
-                response = client.models.generate_content(
-                    model="gemini-2.5-flash",
-                    contents=[prompt, side_img, top_img]
-                )
-                text = response.text
-                
-                score = 5
-                match = re.search(r'Score:\s*(\d)', text)
-                if match: score = int(match.group(1))
-                
-                opinion = text.split("Opinion:")[1].strip() if "Opinion:" in text else text
-                return {"bcs": score, "opinion": opinion}
-                
+        for attempt in range(max_retries):
+                    try:
+                        response = client.models.generate_content(
+                            model="gemini-1.5-flash",
+                            contents=[prompt, side_img, top_img]
+                        )
+                        # ... 결과 파싱 로직 ...
+                        return {"bcs": score, "opinion": opinion}
+                        
+                    except Exception as e:
+                        err_msg = str(e)
+                        if "429" in err_msg:
+                            # [핵심] 재시도할수록 대기 시간을 5초, 10초, 15초로 늘립니다.
+                            wait_time = (attempt + 1) * 5
+                            st.warning(f"서버 혼잡으로 {wait_time}초 후 다시 시도합니다... (시도 {attempt + 1}/{max_retries})")
+                            time.sleep(wait_time)
+                            continue
+                        raise e
             except Exception as e:
-                if "429" in str(e) and attempt < max_retries:
-                    time.sleep(5)
-                    continue
-                raise e
-    except Exception as e:
-        return {"bcs": 5, "opinion": f"Analysis error: {str(e)[:100]}"}
+                return {"bcs": 5, "opinion": f"AI Error: {str(e)[:100]}"}
 
 # --- 4. Main UI ---
 st.title("🐾 Pet Longevity AI (Global)")
