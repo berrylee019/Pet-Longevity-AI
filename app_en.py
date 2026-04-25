@@ -80,8 +80,12 @@ def create_report(breed, bcs, pace, opinion):
 
 # --- 3. AI Analysis Logic ---
 def analyze_pet_vision(side_path, top_path, breed, max_retries=3):
+    # 1. 초기 결과값 설정 (에러 발생 시에도 이 형식을 유지하여 TypeError 방지)
+    result = {"bcs": 5, "opinion": "Starting analysis..."}
+    
     if client is None:
-        return {"bcs": 5, "opinion": "AI Client not initialized."}
+        result["opinion"] = "AI Client not initialized. Please check API Key."
+        return result
 
     try:
         side_img = Image.open(side_path)
@@ -99,33 +103,44 @@ def analyze_pet_vision(side_path, top_path, breed, max_retries=3):
         # i 반복문 시작
         for attempt in range(max_retries):
             try:
-                # [수정] 모델명을 가장 표준적인 명칭으로 고정
+                # [중요] 모델명을 'gemini-1.5-flash'로 확실하게 고정
                 response = client.models.generate_content(
-                    model="gemini-1.5-flash", 
+                    model="gemini-1.5-flash",
                     contents=[prompt, side_img, top_img]
                 )
                 text = response.text
                 
-                # 결과 파싱...
-                return {"bcs": 5, "opinion": text}
+                # 2. 결과 파싱 (성공 시 데이터 업데이트)
+                score = 5
+                match = re.search(r'Score:\s*(\d)', text)
+                if match: score = int(match.group(1))
                 
+                opinion = text.split("Opinion:")[1].strip() if "Opinion:" in text else text
+                
+                result["bcs"] = score
+                result["opinion"] = opinion
+                return result # 성공 시 즉시 반환
+
             except Exception as e:
                 err_msg = str(e).upper()
                 if "429" in err_msg:
-                    # [핵심] 429가 나면 대기 시간을 대폭 늘립니다 (15초, 30초...)
-                    wait_time = (attempt + 1) * 15 
-                    st.warning(f"서버가 너무 바쁩니다. {wait_time}초 후 자동으로 다시 시도합니다... ({attempt+1}/{max_retries})")
+                    wait_time = (attempt + 1) * 15
+                    st.warning(f"Quota exceeded. Retrying in {wait_time}s... ({attempt+1}/{max_retries})")
                     time.sleep(wait_time)
                     continue
                 elif "404" in err_msg:
-                    # 404가 나면 모델명을 다른 후보군으로 교체해서 시도
-                    st.info("모델 명칭을 조정하여 재시도합니다...")
-                    # 다음 시도 때는 다른 이름을 써볼 수 있게 로직을 짤 수도 있습니다.
-                    continue
-                raise e
+                    # 404 에러 시 모델명을 조정해 보지만, 기본적으로 result는 유지
+                    st.error("Model not found. Please check your API project settings.")
+                    break # 404는 기다려도 해결되지 않으므로 중단
+                else:
+                    result["opinion"] = f"AI Error: {str(e)[:50]}"
+                    break
 
     except Exception as e:
-        return {"bcs": 5, "opinion": f"최종 오류: {str(e)[:100]}"}
+        result["opinion"] = f"System Error: {str(e)[:50]}"
+    
+    # 3. 모든 시도가 실패해도 반드시 딕셔너리 구조를 반환하여 154번 라인 에러 방지
+    return result
 
 # --- 4. Main UI ---
 st.title("🐾 Pet Longevity AI (Global)")
