@@ -103,38 +103,55 @@ def analyze_pet_vision(side_path, top_path, breed, max_retries=3):
         # i 반복문 시작
         for attempt in range(max_retries):
             try:
-                # [해결책] 모델명을 리스트로 만들어 하나씩 찔러봅니다.
-                # 1.5-flash가 안 되면 1.5-flash-latest로, 그것도 안 되면 pro로 시도합니다.
-                model_candidates = ["gemini-1.5-flash", "gemini-1.5-flash-latest", "gemini-1.5-pro"]
-                
+                # [404 방어] 후보 모델명을 순차적으로 테스트
+                model_names = ["gemini-1.5-flash", "gemini-1.5-flash-latest", "gemini-1.5-pro"]
+                text = ""
                 success = False
-                for model_name in model_candidates:
+
+                for m_name in model_names:
                     try:
                         response = client.models.generate_content(
-                            model=model_name,
+                            model=m_name,
                             contents=[prompt, side_img, top_img]
                         )
                         text = response.text
                         success = True
-                        break # 성공하면 루프 탈출
+                        break # 성공하면 모델 루프 탈출
                     except Exception as inner_e:
                         if "404" in str(inner_e):
-                            continue # 404면 다음 모델명으로 시도
+                            continue # 다음 모델로 시도
                         else:
-                            raise inner_e # 429 등 다른 에러면 상위 try로 전달
-                
-                if not success:
-                    raise Exception("All model variants failed with 404.")
+                            raise inner_e # 429 등은 상위 try로 전달
 
-                # 결과 파싱 로직 (기존과 동일)
+                if not success:
+                    raise Exception("All models failed with 404.")
+
+                # 결과 파싱
                 score = 5
                 match = re.search(r'Score:\s*(\d)', text)
                 if match: score = int(match.group(1))
+                
                 opinion = text.split("Opinion:")[1].strip() if "Opinion:" in text else text
                 
                 result["bcs"] = score
                 result["opinion"] = opinion
-                return result
+                return result # 성공 시 최종 반환
+
+            except Exception as e:
+                err_msg = str(e).upper()
+                if "429" in err_msg:
+                    wait_time = (attempt + 1) * 15
+                    st.warning(f"Quota exceeded. Retrying in {wait_time}s... ({attempt+1}/{max_retries})")
+                    time.sleep(wait_time)
+                    continue # 다음 재시도로
+                else:
+                    result["opinion"] = f"AI Error: {str(e)[:100]}"
+                    break # 치명적 에러 시 중단
+
+    except Exception as e:
+        result["opinion"] = f"System Error: {str(e)[:100]}"
+    
+    return result
 
 # --- 4. Main UI ---
 st.title("🐾 Pet Longevity AI (Global)")
