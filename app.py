@@ -181,7 +181,7 @@ with img_col2:
         st.caption("상단 이미지를 불러올 수 없습니다. 파일 경로를 확인해 주세요.")
 
 # --- 얼리버드 사전예약 기능 영역 (오타 수정 완료) ---
-st.markdown("<h4 style='text-align: center; margin-top: 15px;'>🚀 Pet Longevity AI 얼리버드 사전예약 신청</h4>", unsafe_allow_html=True)
+st.markdown("<h4 style='text-align: center; margin-top: 15px;'>🦊 Pet Longevity AI 얼리버드 사전예약 신청</h4>", unsafe_allow_html=True)
 
 # 3개의 컬럼을 만들어 이메일 입력, 견종 선택, 예약 버튼을 한 줄에 나란히 배치
 reserve_col1, reserve_col2, reserve_col3 = st.columns([2, 1.5, 1])
