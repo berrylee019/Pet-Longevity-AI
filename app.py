@@ -132,7 +132,7 @@ def analyze_pet_with_retry(client, side_img_path, top_img_path, breed_name, max_
             try:
                 # 형님, 기존의 존재하지 않는 2.5 대신 안정적인 1.5-flash로 지정해 두었습니다.
                 response = client.models.generate_content(
-                    model="gemini-1.5-flash",
+                    model="gemini-2.5-flash",
                     contents=[prompt, side_img, top_img]
                 )
                 res_text = response.text.strip()
