@@ -9,7 +9,7 @@ import time
 from PIL import Image
 from fpdf import FPDF
 # 구글 시트 연동을 위한 라이브러리 추가
-from streamlit_gsheets import GSheetsConnection
+from gspread
 
 # [필수] 1순위: 페이지 설정을 가장 먼저 실행해야 에러가 나지 않습니다.
 st.set_page_config(page_title="Pet Longevity AI", layout="wide")
