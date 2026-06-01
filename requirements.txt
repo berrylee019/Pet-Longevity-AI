@@ -6,5 +6,5 @@ google-genai
 Pillow
 fpdf
 google-genai
-st-gsheets-connection
+gspread
 pandas
