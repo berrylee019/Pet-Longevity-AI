@@ -236,7 +236,7 @@ with st.container():
                 current_time = get_kst_now().strftime('%Y-%m-%d %H:%M:%S')
                 worksheet.append_row([user_email, reserved_breed, current_time])
                 
-                st.success("🎉 얼리버드 사전예약이 완료되었습니다! 구글 시트(시트1)에 실시간으로 정상 기록되었습니다.")
+                st.success("🎉 얼리버드 사전예약이 완료되었습니다!")
             except Exception as e:
                 st.error(f"구글 시트 저장 실패. Secrets의 구글 자격증명 설정을 확인해 주세요. 에러: {e}")
 
