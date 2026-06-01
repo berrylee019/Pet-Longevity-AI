@@ -5,6 +5,5 @@ torchvision
 google-genai
 Pillow
 fpdf
-google-genai
 gspread
 pandas
