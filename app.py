@@ -169,12 +169,17 @@ with st.sidebar:
 
 # [핵심 추가] 메인 상단 중앙 이미지 배치 로직
 # 좌우 여백(1, 1)을 주고 가운데 컬럼(2)의 크기를 키워 중앙 정렬 효과를 냅니다.
+# [수정 후] 메인 상단 중앙 이미지 배치 로직 (버전 호환성 확보)
 img_col1, img_col2, img_col3 = st.columns([1, 2, 1])
 with img_col2:
-    # GitHub 저장소나 로컬에 존재하는 이미지 파일명을 넣어주세요. (예: main_logo.png)
     main_image_path = "card_bg1.png" 
     if os.path.exists(main_image_path):
-        st.image(main_image_path, use_container_width=True)
+        try:
+            # 최신 버전 Streamlit용 매개변수 시도
+            st.image(main_image_path, use_container_width=True)
+        except TypeError:
+            # 만약 TypeError가 나면 구버전 매개변수로 우회 처리
+            st.image(main_image_path, use_column_width=True)
     else:
         # 파일이 없을 때 레이아웃이 깨지지 않도록 플레이스홀더 처리
         st.caption("상단 이미지를 불러올 수 없습니다. 파일 경로를 확인해 주세요.")
