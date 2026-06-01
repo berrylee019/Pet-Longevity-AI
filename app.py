@@ -8,6 +8,8 @@ import pandas as pd
 import time
 from PIL import Image
 from fpdf import FPDF
+# 구글 시트 연동을 위한 라이브러리 추가
+from streamlit_gsheets import GSheetsConnection
 
 # [필수] 1순위: 페이지 설정을 가장 먼저 실행해야 에러가 나지 않습니다.
 st.set_page_config(page_title="Pet Longevity AI", layout="wide")
@@ -130,9 +132,8 @@ def analyze_pet_with_retry(client, side_img_path, top_img_path, breed_name, max_
 
         for i in range(max_retries):
             try:
-                # 형님, 기존의 존재하지 않는 2.5 대신 안정적인 1.5-flash로 지정해 두었습니다.
                 response = client.models.generate_content(
-                    model="gemini-2.5-flash",
+                    model="gemini-1.5-flash",
                     contents=[prompt, side_img, top_img]
                 )
                 res_text = response.text.strip()
@@ -167,22 +168,62 @@ with st.sidebar:
     admin_pass = st.text_input("관리자 비번", type="password")
     is_admin = (admin_pass == "2004")
 
-# [핵심 추가] 메인 상단 중앙 이미지 배치 로직
-# 좌우 여백(1, 1)을 주고 가운데 컬럼(2)의 크기를 키워 중앙 정렬 효과를 냅니다.
-# [수정 후] 메인 상단 중앙 이미지 배치 로직 (버전 호환성 확보)
+# 메인 상단 중앙 이미지 배치 로직 (버전 호환성 확보)
 img_col1, img_col2, img_col3 = st.columns([1, 2, 1])
 with img_col2:
     main_image_path = "main_logo.png" 
     if os.path.exists(main_image_path):
         try:
-            # 최신 버전 Streamlit용 매개변수 시도
             st.image(main_image_path, use_container_width=True)
         except TypeError:
-            # 만약 TypeError가 나면 구버전 매개변수로 우회 처리
             st.image(main_image_path, use_column_width=True)
     else:
-        # 파일이 없을 때 레이아웃이 깨지지 않도록 플레이스홀더 처리
         st.caption("상단 이미지를 불러올 수 없습니다. 파일 경로를 확인해 주세요.")
+
+# --- [핵심 추가] 얼리버드 사전예약 구글 시트 연동 기능 영역 ---
+st.markdown("<h4 style='text-align: center; margin-top: 15px;'>🚀 Pet Longevity AI 얼리버드 사전예약 신청</h4>", unsafe_allow_address=True)
+
+# 3개의 컬럼을 만들어 이메일 입력, 견종 선택, 예약 버튼을 한 줄에 나란히 배치
+reserve_col1, reserve_col2, reserve_col3 = st.columns([2, 1.5, 1])
+
+with reserve_col1:
+    user_email = st.text_input("이메일 주소", placeholder="example@email.com", label_visibility="collapsed")
+with reserve_col2:
+    reserved_breed = st.selectbox("반려견 견종 선택", ["리트리버", "말티즈", "푸들", "포메라니안", "킹 찰스 스패니얼", "저먼 쉐퍼드", "기타"], label_visibility="collapsed")
+with reserve_col3:
+    submit_reservation = st.button("🎁 얼리버드 사전예약", use_container_width=True, type="secondary")
+
+if submit_reservation:
+    # 이메일 간단 유효성 검증
+    if not user_email or "@" not in user_email:
+        st.warning("올바른 이메일 주소를 입력해 주세요.")
+    else:
+        try:
+            # st.connection을 이용해 구글 시트(시트1)에 접근합니다.
+            conn_gsheet = st.connection("gsheets", type=GSheetsConnection)
+            
+            # 기존 구글 시트 데이터 읽어오기 (워크시트 이름은 '시트1')
+            existing_df = conn_gsheet.read(worksheet="시트1", ttl=0)
+        except Exception as e:
+            # 빈 시트이거나 초기 데이터가 없는 경우 데이터프레임 구조 생성
+            existing_df = pd.DataFrame(columns=["이메일", "견종", "신청시간"])
+        
+        # 신규 신청 데이터 한 줄 생성
+        new_data = pd.DataFrame([{
+            "이메일": user_email,
+            "견종": reserved_breed,
+            "신청시간": get_kst_now().strftime('%Y-%m-%d %H:%M:%S')
+        }])
+        
+        try:
+            # 기존 데이터와 새 데이터 병합 후 구글 시트에 업데이트 반영
+            updated_df = pd.concat([existing_df, new_data], ignore_index=True)
+            conn_gsheet.update(worksheet="시트1", data=updated_df)
+            st.success("🎉 얼리버드 사전예약이 완료되었습니다! 구글 시트에 정상 기록되었습니다.")
+        except Exception as e:
+            st.error(f"구글 시트 저장 실패. Secrets 설정을 확인해 주세요. 에러: {e}")
+
+st.markdown("<br>", unsafe_allow_html=True)
 
 # 탭 메뉴 구성
 tabs = st.tabs(["🔍 정밀 분석 및 PDF", "📊 데이터 센터"])
