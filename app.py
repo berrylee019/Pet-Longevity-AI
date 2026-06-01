@@ -180,55 +180,65 @@ with img_col2:
     else:
         st.caption("상단 이미지를 불러올 수 없습니다. 파일 경로를 확인해 주세요.")
 
-# --- 얼리버드 사전예약 기능 영역 (오타 수정 완료) ---
-st.markdown("<h4 style='text-align: center; margin-top: 15px;'>🦊 Pet Longevity AI 얼리버드 사전예약 신청</h4>", unsafe_allow_html=True)
+# --- [디자인 개선] 얼리버드 사전예약 영역 (연한 배경색 박스 적용) ---
+# 컨테이너를 생성하여 내부 요소들을 묶고 은은한 배경색과 테두리 효과를 줍니다.
+with st.container():
+    st.markdown(
+        """
+        <div style="background-color: #f0f4f8; padding: 20px; border-radius: 10px; border: 1px solid #d9e2ec; margin-bottom: 20px;">
+            <h4 style="text-align: center; margin-top: 0px; margin-bottom: 15px; color: #102a43;">
+                🚀 Pet Longevity AI 얼리버드 사전예약 신청
+            </h4>
+            <p style="text-align: center; font-size: 13px; color: #627d98; margin-top: -10px; margin-bottom: 15px;">
+                정식 출시 전 사전예약 하시고 혜택과 알림을 먼저 받아보세요!
+            </p>
+        </div>
+        """, 
+        unsafe_allow_html=True
+    )
+    
+    # 입력 필드들을 배경 아래에 깔끔하게 나열하기 위해 내부 컬럼 구성
+    reserve_col1, reserve_col2, reserve_col3 = st.columns([2, 1.5, 1])
 
-# 3개의 컬럼을 만들어 이메일 입력, 견종 선택, 예약 버튼을 한 줄에 나란히 배치
-reserve_col1, reserve_col2, reserve_col3 = st.columns([2, 1.5, 1])
+    with reserve_col1:
+        user_email = st.text_input("이메일 주소 입력", placeholder="example@email.com", label_visibility="collapsed", key="reserve_email")
+    with reserve_col2:
+        reserved_breed = st.selectbox("반려견 견종 선택", ["리트리버", "말티즈", "푸들", "포메라니안", "킹 찰스 스패니얼", "저먼 쉐퍼드", "기타"], label_visibility="collapsed", key="reserve_breed")
+    with reserve_col3:
+        submit_reservation = st.button("🎁 얼리버드 사전예약", use_container_width=True, type="primary", key="reserve_btn")
 
-with reserve_col1:
-    user_email = st.text_input("이메일 주소", placeholder="example@email.com", label_visibility="collapsed")
-with reserve_col2:
-    reserved_breed = st.selectbox("반려견 견종 선택", ["리트리버", "말티즈", "푸들", "포메라니안", "킹 찰스 스패니얼", "저먼 쉐퍼드", "기타"], label_visibility="collapsed")
-with reserve_col3:
-    submit_reservation = st.button("🎁 얼리버드 사전예약", use_container_width=True, type="secondary")
-
-if submit_reservation:
-    if not user_email or "@" not in user_email:
-        st.warning("올바른 이메일 주소를 입력해 주세요.")
-    else:
-        try:
-            # 1. Streamlit Secrets에서 구글 서비스 계정 자격 증명서 로드
-            credentials = {
-                "type": st.secrets["connections"]["gsheets"]["type"],
-                "project_id": st.secrets["connections"]["gsheets"]["project_id"],
-                "private_key_id": st.secrets["connections"]["gsheets"]["private_key_id"],
-                "private_key": st.secrets["connections"]["gsheets"]["private_key"],
-                "client_email": st.secrets["connections"]["gsheets"]["client_email"],
-                "client_id": st.secrets["connections"]["gsheets"]["client_id"],
-                "auth_uri": st.secrets["connections"]["gsheets"]["auth_uri"],
-                "token_uri": st.secrets["connections"]["gsheets"]["token_uri"],
-                "auth_provider_x509_cert_url": st.secrets["connections"]["gsheets"]["auth_provider_x509_cert_url"],
-                "client_x509_cert_url": st.secrets["connections"]["gsheets"]["client_x509_cert_url"]
-            }
-            
-            # 2. 구글 시트 인증 및 연결 실행
-            gc = gspread.service_account_from_dict(credentials)
-            
-            # Secrets에 등록된 스프레드시트 URL 또는 ID 가져오기
-            spreadsheet_url = st.secrets["connections"]["gsheets"]["spreadsheet"]
-            sh = gc.open_by_url(spreadsheet_url)
-            
-            # '시트1' 워크시트 선택
-            worksheet = sh.worksheet("시트1")
-            
-            # 3. 새로운 데이터 행(Row) 추가
-            current_time = get_kst_now().strftime('%Y-%m-%d %H:%M:%S')
-            worksheet.append_row([user_email, reserved_breed, current_time])
-            
-            st.success("🎉 얼리버드 사전예약이 완료되었습니다! 구글 시트(시트1)에 실시간으로 정상 기록되었습니다.")
-        except Exception as e:
-            st.error(f"구글 시트 저장 실패. Secrets의 구글 자격증명 설정을 확인해 주세요. 에러: {e}")
+    if submit_reservation:
+        if not user_email or "@" not in user_email:
+            st.warning("올바른 이메일 주소를 입력해 주세요.")
+        else:
+            try:
+                # 1. Streamlit Secrets에서 구글 서비스 계정 자격 증명서 로드
+                credentials = {
+                    "type": st.secrets["connections"]["gsheets"]["type"],
+                    "project_id": st.secrets["connections"]["gsheets"]["project_id"],
+                    "private_key_id": st.secrets["connections"]["gsheets"]["private_key_id"],
+                    "private_key": st.secrets["connections"]["gsheets"]["private_key"],
+                    "client_email": st.secrets["connections"]["gsheets"]["client_email"],
+                    "client_id": st.secrets["connections"]["gsheets"]["client_id"],
+                    "auth_uri": st.secrets["connections"]["gsheets"]["auth_uri"],
+                    "token_uri": st.secrets["connections"]["gsheets"]["token_uri"],
+                    "auth_provider_x509_cert_url": st.secrets["connections"]["gsheets"]["auth_provider_x509_cert_url"],
+                    "client_x509_cert_url": st.secrets["connections"]["gsheets"]["client_x509_cert_url"]
+                }
+                
+                # 2. 구글 시트 인증 및 연결 실행
+                gc = gspread.service_account_from_dict(credentials)
+                spreadsheet_url = st.secrets["connections"]["gsheets"]["spreadsheet"]
+                sh = gc.open_by_url(spreadsheet_url)
+                worksheet = sh.worksheet("시트1")
+                
+                # 3. 새로운 데이터 행(Row) 추가
+                current_time = get_kst_now().strftime('%Y-%m-%d %H:%M:%S')
+                worksheet.append_row([user_email, reserved_breed, current_time])
+                
+                st.success("🎉 얼리버드 사전예약이 완료되었습니다! 구글 시트(시트1)에 실시간으로 정상 기록되었습니다.")
+            except Exception as e:
+                st.error(f"구글 시트 저장 실패. Secrets의 구글 자격증명 설정을 확인해 주세요. 에러: {e}")
 
 st.markdown("<br>", unsafe_allow_html=True)
 
@@ -241,7 +251,7 @@ with tabs[0]:
     with c1: side_f = st.file_uploader("옆모습 업로드", type=['jpg', 'png'], key="side")
     with c2: top_f = st.file_uploader("윗모습 업로드", type=['jpg', 'png'], key="top")
     
-    if st.button("🧠 분석 실행", use_container_width=True, type="primary"):
+    if st.button("🧠 분석 실행", use_container_width=True, type="primary", key="analyze_btn"):
         if side_f and top_f:
             t_stamp = get_kst_now().strftime("%Y%m%d_%H%M%S")
             s_p, t_p = f"database_images/{t_stamp}_s.png", f"database_images/{t_stamp}_t.png"
