@@ -172,7 +172,7 @@ with st.sidebar:
 # [수정 후] 메인 상단 중앙 이미지 배치 로직 (버전 호환성 확보)
 img_col1, img_col2, img_col3 = st.columns([1, 2, 1])
 with img_col2:
-    main_image_path = "card_bg1.png" 
+    main_image_path = "main_logo.png" 
     if os.path.exists(main_image_path):
         try:
             # 최신 버전 Streamlit용 매개변수 시도
