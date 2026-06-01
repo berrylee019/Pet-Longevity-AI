@@ -8,7 +8,7 @@ import pandas as pd
 import time
 from PIL import Image
 from fpdf import FPDF
-# 구글 시트 연동을 위한 라이브러리 추가
+# 구글 공식 시트 연동 라이브러리
 import gspread
 
 # [필수] 1순위: 페이지 설정을 가장 먼저 실행해야 에러가 나지 않습니다.
@@ -180,8 +180,8 @@ with img_col2:
     else:
         st.caption("상단 이미지를 불러올 수 없습니다. 파일 경로를 확인해 주세요.")
 
-# --- [핵심 추가] 얼리버드 사전예약 구글 시트 연동 기능 영역 ---
-st.markdown("<h4 style='text-align: center; margin-top: 15px;'>🚀 Pet Longevity AI 얼리버드 사전예약 신청</h4>", unsafe_allow_address=True)
+# --- 얼리버드 사전예약 기능 영역 (오타 수정 완료) ---
+st.markdown("<h4 style='text-align: center; margin-top: 15px;'>🚀 Pet Longevity AI 얼리버드 사전예약 신청</h4>", unsafe_allow_html=True)
 
 # 3개의 컬럼을 만들어 이메일 입력, 견종 선택, 예약 버튼을 한 줄에 나란히 배치
 reserve_col1, reserve_col2, reserve_col3 = st.columns([2, 1.5, 1])
@@ -194,34 +194,41 @@ with reserve_col3:
     submit_reservation = st.button("🎁 얼리버드 사전예약", use_container_width=True, type="secondary")
 
 if submit_reservation:
-    # 이메일 간단 유효성 검증
     if not user_email or "@" not in user_email:
         st.warning("올바른 이메일 주소를 입력해 주세요.")
     else:
         try:
-            # st.connection을 이용해 구글 시트(시트1)에 접근합니다.
-            conn_gsheet = st.connection("gsheets", type=GSheetsConnection)
+            # 1. Streamlit Secrets에서 구글 서비스 계정 자격 증명서 로드
+            credentials = {
+                "type": st.secrets["connections"]["gsheets"]["type"],
+                "project_id": st.secrets["connections"]["gsheets"]["project_id"],
+                "private_key_id": st.secrets["connections"]["gsheets"]["private_key_id"],
+                "private_key": st.secrets["connections"]["gsheets"]["private_key"],
+                "client_email": st.secrets["connections"]["gsheets"]["client_email"],
+                "client_id": st.secrets["connections"]["gsheets"]["client_id"],
+                "auth_uri": st.secrets["connections"]["gsheets"]["auth_uri"],
+                "token_uri": st.secrets["connections"]["gsheets"]["token_uri"],
+                "auth_provider_x509_cert_url": st.secrets["connections"]["gsheets"]["auth_provider_x509_cert_url"],
+                "client_x509_cert_url": st.secrets["connections"]["gsheets"]["client_x509_cert_url"]
+            }
             
-            # 기존 구글 시트 데이터 읽어오기 (워크시트 이름은 '시트1')
-            existing_df = conn_gsheet.read(worksheet="시트1", ttl=0)
+            # 2. 구글 시트 인증 및 연결 실행
+            gc = gspread.service_account_from_dict(credentials)
+            
+            # Secrets에 등록된 스프레드시트 URL 또는 ID 가져오기
+            spreadsheet_url = st.secrets["connections"]["gsheets"]["spreadsheet"]
+            sh = gc.open_by_url(spreadsheet_url)
+            
+            # '시트1' 워크시트 선택
+            worksheet = sh.worksheet("시트1")
+            
+            # 3. 새로운 데이터 행(Row) 추가
+            current_time = get_kst_now().strftime('%Y-%m-%d %H:%M:%S')
+            worksheet.append_row([user_email, reserved_breed, current_time])
+            
+            st.success("🎉 얼리버드 사전예약이 완료되었습니다! 구글 시트(시트1)에 실시간으로 정상 기록되었습니다.")
         except Exception as e:
-            # 빈 시트이거나 초기 데이터가 없는 경우 데이터프레임 구조 생성
-            existing_df = pd.DataFrame(columns=["이메일", "견종", "신청시간"])
-        
-        # 신규 신청 데이터 한 줄 생성
-        new_data = pd.DataFrame([{
-            "이메일": user_email,
-            "견종": reserved_breed,
-            "신청시간": get_kst_now().strftime('%Y-%m-%d %H:%M:%S')
-        }])
-        
-        try:
-            # 기존 데이터와 새 데이터 병합 후 구글 시트에 업데이트 반영
-            updated_df = pd.concat([existing_df, new_data], ignore_index=True)
-            conn_gsheet.update(worksheet="시트1", data=updated_df)
-            st.success("🎉 얼리버드 사전예약이 완료되었습니다! 구글 시트에 정상 기록되었습니다.")
-        except Exception as e:
-            st.error(f"구글 시트 저장 실패. Secrets 설정을 확인해 주세요. 에러: {e}")
+            st.error(f"구글 시트 저장 실패. Secrets의 구글 자격증명 설정을 확인해 주세요. 에러: {e}")
 
 st.markdown("<br>", unsafe_allow_html=True)
 
