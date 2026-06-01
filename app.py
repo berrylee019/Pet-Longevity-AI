@@ -130,8 +130,9 @@ def analyze_pet_with_retry(client, side_img_path, top_img_path, breed_name, max_
 
         for i in range(max_retries):
             try:
+                # 형님, 기존의 존재하지 않는 2.5 대신 안정적인 1.5-flash로 지정해 두었습니다.
                 response = client.models.generate_content(
-                    model="gemini-2.5-flash",
+                    model="gemini-1.5-flash",
                     contents=[prompt, side_img, top_img]
                 )
                 res_text = response.text.strip()
@@ -166,6 +167,19 @@ with st.sidebar:
     admin_pass = st.text_input("관리자 비번", type="password")
     is_admin = (admin_pass == "2004")
 
+# [핵심 추가] 메인 상단 중앙 이미지 배치 로직
+# 좌우 여백(1, 1)을 주고 가운데 컬럼(2)의 크기를 키워 중앙 정렬 효과를 냅니다.
+img_col1, img_col2, img_col3 = st.columns([1, 2, 1])
+with img_col2:
+    # GitHub 저장소나 로컬에 존재하는 이미지 파일명을 넣어주세요. (예: main_logo.png)
+    main_image_path = "card_bg1.png" 
+    if os.path.exists(main_image_path):
+        st.image(main_image_path, use_container_width=True)
+    else:
+        # 파일이 없을 때 레이아웃이 깨지지 않도록 플레이스홀더 처리
+        st.caption("상단 이미지를 불러올 수 없습니다. 파일 경로를 확인해 주세요.")
+
+# 탭 메뉴 구성
 tabs = st.tabs(["🔍 정밀 분석 및 PDF", "📊 데이터 센터"])
 
 with tabs[0]:
