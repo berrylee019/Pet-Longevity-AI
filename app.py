@@ -77,10 +77,10 @@ def create_pdf_report(breed, bcs, pace, reason):
         table_width = 160
         start_x = (210 - table_width) / 2
         data = [
-            ['진단 대상 견종', f'{breed}'], 
+            ['분석 대상 견종', f'{breed}'], 
             ['체형 점수 (BCS)', f'{bcs} / 9 점'], 
             ['예상 노화 속도', f'{pace} 배속'], 
-            ['진단 일시', get_kst_now().strftime('%Y-%m-%d %H:%M')]
+            ['분석 일시', get_kst_now().strftime('%Y-%m-%d %H:%M')]
         ]
         
         for row in data:
@@ -93,7 +93,7 @@ def create_pdf_report(breed, bcs, pace, reason):
         pdf.set_x(start_x)
         pdf.set_font(pdf.font_family, 'B', 14)
         pdf.set_text_color(0, 51, 102)
-        pdf.cell(0, 8, '[ AI 수의사 종합 소견 ]', ln=True)
+        pdf.cell(0, 8, '[ AI 수의사 분석 리포트 ]', ln=True)
         pdf.ln(2)
         
         clean_reason = reason.replace('**', '').replace('*', '').strip()
@@ -262,7 +262,7 @@ with tabs[0]:
                 res = analyze_pet_with_retry(client, s_p, t_p, selected_breed)
                 pace = calculate_pace_of_aging(res["bcs"], selected_breed)
                 
-                st.info(f"**[진단 결과]**\n\n{res['reason']}")
+                st.info(f"**[분석 결과]**\n\n{res['reason']}")
                 
                 pdf_p = create_pdf_report(selected_breed, res["bcs"], pace, res["reason"])
                 
