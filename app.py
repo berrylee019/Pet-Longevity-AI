@@ -246,7 +246,7 @@ st.markdown("<br>", unsafe_allow_html=True)
 tabs = st.tabs(["🔍 정밀 분석 및 PDF", "📊 데이터 센터"])
 
 with tabs[0]:
-    st.header("🐶 AI 수의사 노화 정밀 진단")
+    st.header("🐶 AI 수의사 노화 건강 리포트")
     c1, c2 = st.columns(2)
     with c1: side_f = st.file_uploader("옆모습 업로드", type=['jpg', 'png'], key="side")
     with c2: top_f = st.file_uploader("윗모습 업로드", type=['jpg', 'png'], key="top")
@@ -268,7 +268,7 @@ with tabs[0]:
                 
                 if pdf_p:
                     with open(pdf_p, "rb") as f:
-                        st.download_button("📄 PDF 진단서 다운로드", f, file_name=f"Report_{selected_breed}.pdf", use_container_width=True)
+                        st.download_button("📄 PDF 건강리포트 다운로드", f, file_name=f"Report_{selected_breed}.pdf", use_container_width=True)
                     
                     # 로그 기록
                     try:
