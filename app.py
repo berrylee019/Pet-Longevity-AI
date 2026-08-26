@@ -49,7 +49,7 @@ def get_kst_now():
 # --- 2. PDF 생성 로직 ---
 class PetReportPDF(FPDF):
     def header(self):
-        header_img = "card_bg1_edited.png"
+        header_img = "card_bg2.png"
         if os.path.exists(header_img):
             self.image(header_img, x=10, y=10, w=190)
             self.ln(32)
