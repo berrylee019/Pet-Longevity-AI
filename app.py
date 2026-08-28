@@ -92,7 +92,7 @@ class PetReportPDF(FPDF):
         header_img = "card_bg2.png"
         if os.path.exists(header_img):
             self.image(header_img, x=10, y=10, w=190)
-            self.ln(32)
+            self.ln(50)
         else:
             self.set_font('Helvetica', 'B', 20)
             self.cell(0, 15, 'Pet Health Report', ln=True, align='C')
