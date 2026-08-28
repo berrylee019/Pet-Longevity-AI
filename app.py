@@ -215,7 +215,7 @@ with st.sidebar:
 # 메인 상단 중앙 이미지 배치 로직 (버전 호환성 확보)
 img_col1, img_col2, img_col3 = st.columns([1, 2, 1])
 with img_col2:
-    main_image_path = "main_logo1.png" 
+    main_image_path = "main_logo1.jpg" 
     if os.path.exists(main_image_path):
         try:
             st.image(main_image_path, use_container_width=True)
