@@ -46,7 +46,47 @@ def get_kst_now():
     kst = datetime.timezone(datetime.timedelta(hours=9))
     return datetime.datetime.now(kst)
 
-# --- 2. PDF 생성 로직 ---
+# --- 마크다운/불필요 기호 정리 함수 ---
+def clean_markdown_text(text: str) -> str:
+    """
+    AI 응답 텍스트에서 마크다운 문법과 불필요한 기호를 제거해서
+    PDF에 '** 나 #' 같은 깨진 텍스트가 남지 않도록 정리합니다.
+    """
+    if not text:
+        return ""
+
+    t = text
+
+    # 1) 코드블록(```...```) 통째로 제거
+    t = re.sub(r"```.*?```", "", t, flags=re.DOTALL)
+
+    # 2) 인라인 코드 백틱 제거 (`word` -> word)
+    t = re.sub(r"`([^`]*)`", r"\1", t)
+
+    # 3) 마크다운 헤더 (#, ##, ### ...) 줄 앞의 기호 제거
+    t = re.sub(r"^\s{0,3}#{1,6}\s*", "", t, flags=re.MULTILINE)
+
+    # 4) 굵게/기울임 (**word**, *word*, __word__, _word_) -> word
+    t = re.sub(r"(\*\*|__)(.*?)\1", r"\2", t)
+    t = re.sub(r"(\*|_)(.*?)\1", r"\2", t)
+
+    # 5) 리스트 기호 (-, *, +로 시작하는 불릿) 제거
+    t = re.sub(r"^\s*[-*+]\s+", "", t, flags=re.MULTILINE)
+
+    # 6) 마크다운 링크 [text](url) -> text
+    t = re.sub(r"\[([^\]]+)\]\((?:[^)]+)\)", r"\1", t)
+
+    # 7) 남은 잔여 특수기호(#, *, _, ~, >) 정리
+    t = re.sub(r"[#*_~>]+", "", t)
+
+    # 8) 과도한 공백/빈 줄 정리
+    t = re.sub(r"[ \t]+", " ", t)
+    t = re.sub(r"\n{3,}", "\n\n", t)
+
+    return t.strip()
+
+
+# --- PDF 생성 로직 ---
 class PetReportPDF(FPDF):
     def header(self):
         header_img = "card_bg2.png"
@@ -58,11 +98,12 @@ class PetReportPDF(FPDF):
             self.cell(0, 15, 'Pet Health Report', ln=True, align='C')
             self.ln(5)
 
+
 def create_pdf_report(breed, bcs, pace, reason):
     try:
         pdf = PetReportPDF()
         pdf.set_auto_page_break(auto=False, margin=0)
-        
+
         # 서버에 나눔고딕 폰트가 있는지 확인
         font_path = "NanumGothicBold.ttf"
         if os.path.exists(font_path):
@@ -70,48 +111,51 @@ def create_pdf_report(breed, bcs, pace, reason):
             pdf.set_font('NanumGothic', 'B', 10)
         else:
             pdf.set_font('Helvetica', 'B', 10)
-        
+
         pdf.add_page()
         pdf.ln(5)
-        
+
         table_width = 160
         start_x = (210 - table_width) / 2
         data = [
-            ['분석 대상 견종', f'{breed}'], 
-            ['체형 점수 (BCS)', f'{bcs} / 9 점'], 
-            ['예상 노화 속도', f'{pace} 배속'], 
+            ['분석 대상 견종', f'{breed}'],
+            ['체형 점수 (BCS)', f'{bcs} / 9 점'],
+            ['예상 노화 속도', f'{pace} 배속'],
             ['분석 일시', get_kst_now().strftime('%Y-%m-%d %H:%M')]
         ]
-        
+
         for row in data:
             pdf.set_x(start_x)
             pdf.set_fill_color(245, 245, 245)
             pdf.cell(50, 8, row[0], border=1, fill=True)
             pdf.cell(110, 8, row[1], border=1, ln=True, align='C')
-            
+
         pdf.ln(8)
         pdf.set_x(start_x)
         pdf.set_font(pdf.font_family, 'B', 14)
         pdf.set_text_color(0, 51, 102)
         pdf.cell(0, 8, '[ AI 수의사 분석 리포트 ]', ln=True)
         pdf.ln(2)
-        
-        clean_reason = reason.replace('**', '').replace('*', '').strip()
+
+        # 변경 지점: 정규식 기반 마크다운 정리 함수 사용
+        clean_reason = clean_markdown_text(reason)
+
         pdf.set_font(pdf.font_family, 'B', 9)
         pdf.set_text_color(60, 60, 60)
         pdf.set_x(start_x)
         pdf.multi_cell(table_width, 5.5, clean_reason, border=0, align='L')
-        
-        pdf.set_y(260) 
+
+        pdf.set_y(260)
         pdf.set_text_color(200, 0, 0)
         pdf.cell(0, 8, '초정밀 분석 요청: bslee@yahoo.com', align='C', ln=True)
-        
+
         report_path = f"reports/Report_{get_kst_now().strftime('%Y%m%d%H%M')}.pdf"
         pdf.output(report_path)
         return report_path
     except Exception as e:
         st.error(f"PDF 생성 오류: {e}")
         return None
+
 
 # --- 3. AI 분석 로직 (재시도 및 에러 처리) ---
 def analyze_pet_with_retry(client, side_img_path, top_img_path, breed_name, max_retries=3):
