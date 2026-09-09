@@ -15,6 +15,10 @@ VERIFY_SERVER = "http://127.0.0.1:8000"  # 배포 후 실제 주소로 교체
 
 device_id = st.query_params.get("device_id", "unknown")
 
+ADMIN_KEY = "bslee"  # 원하는 비밀 값으로 바꾸세요
+
+is_admin = st.query_params.get("admin") == ADMIN_KEY
+
 def get_balance(device_id: str) -> int:
     try:
         res = requests.get(f"{VERIFY_SERVER}/credits/{device_id}", timeout=5)
@@ -324,6 +328,7 @@ with tabs[0]:
     
     if st.button("🧠 분석 실행", use_container_width=True, type="primary", key="analyze_btn"):
         if side_f and top_f:
+            if not is_admin:
             balance = get_balance(device_id)
     
             if balance <= 0:
@@ -346,7 +351,9 @@ with tabs[0]:
                 if pdf_p:
                     with open(pdf_p, "rb") as f:
                         st.download_button("📄 PDF 건강리포트 다운로드", f, file_name=f"Report_{selected_breed}.pdf", use_container_width=True)
-    
+                    if not is_admin:
+                        consume_credit(device_id)
+                        
                     # 분석 성공했으니 크레딧 1회 차감
                     consume_credit(device_id)
     
