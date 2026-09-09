@@ -329,44 +329,44 @@ with tabs[0]:
     if st.button("🧠 분석 실행", use_container_width=True, type="primary", key="analyze_btn"):
         if side_f and top_f:
             if not is_admin:
-            balance = get_balance(device_id)
-    
-            if balance <= 0:
-                show_paywall()
-                st.stop()
-    
-            t_stamp = get_kst_now().strftime("%Y%m%d_%H%M%S")
-            s_p, t_p = f"database_images/{t_stamp}_s.png", f"database_images/{t_stamp}_t.png"
-            with open(s_p, "wb") as f: f.write(side_f.getbuffer())
-            with open(t_p, "wb") as f: f.write(top_f.getbuffer())
-    
-            with st.spinner("AI 수의사가 사진을 정밀 분석 중입니다..."):
-                res = analyze_pet_with_retry(client, s_p, t_p, selected_breed)
-                pace = calculate_pace_of_aging(res["bcs"], selected_breed)
-    
-                st.info(f"**[분석 결과]**\n\n{res['reason']}")
-    
-                pdf_p = create_pdf_report(selected_breed, res["bcs"], pace, res["reason"])
-    
-                if pdf_p:
-                    with open(pdf_p, "rb") as f:
-                        st.download_button("📄 PDF 건강리포트 다운로드", f, file_name=f"Report_{selected_breed}.pdf", use_container_width=True)
-                    if not is_admin:
+                balance = get_balance(device_id)
+        
+                if balance <= 0:
+                    show_paywall()
+                    st.stop()
+        
+                t_stamp = get_kst_now().strftime("%Y%m%d_%H%M%S")
+                s_p, t_p = f"database_images/{t_stamp}_s.png", f"database_images/{t_stamp}_t.png"
+                with open(s_p, "wb") as f: f.write(side_f.getbuffer())
+                with open(t_p, "wb") as f: f.write(top_f.getbuffer())
+        
+                with st.spinner("AI 수의사가 사진을 정밀 분석 중입니다..."):
+                    res = analyze_pet_with_retry(client, s_p, t_p, selected_breed)
+                    pace = calculate_pace_of_aging(res["bcs"], selected_breed)
+        
+                    st.info(f"**[분석 결과]**\n\n{res['reason']}")
+        
+                    pdf_p = create_pdf_report(selected_breed, res["bcs"], pace, res["reason"])
+        
+                    if pdf_p:
+                        with open(pdf_p, "rb") as f:
+                            st.download_button("📄 PDF 건강리포트 다운로드", f, file_name=f"Report_{selected_breed}.pdf", use_container_width=True)
+                        if not is_admin:
+                            consume_credit(device_id)
+                            
+                        # 분석 성공했으니 크레딧 1회 차감
                         consume_credit(device_id)
-                        
-                    # 분석 성공했으니 크레딧 1회 차감
-                    consume_credit(device_id)
-    
-                    # 로그 기록
-                    try:
-                        conn = sqlite3.connect('pet_analysis.db')
-                        conn.cursor().execute("INSERT INTO analysis_logs (breed, bcs, pace, reason, date) VALUES (?,?,?,?,?)",
-                                             (selected_breed, res["bcs"], pace, res["reason"], get_kst_now().strftime('%Y-%m-%d %H:%M')))
-                        conn.commit()
-                        conn.close()
-                    except: pass
-        else:
-            st.warning("사진을 모두 업로드해주세요.")
+        
+                        # 로그 기록
+                        try:
+                            conn = sqlite3.connect('pet_analysis.db')
+                            conn.cursor().execute("INSERT INTO analysis_logs (breed, bcs, pace, reason, date) VALUES (?,?,?,?,?)",
+                                                 (selected_breed, res["bcs"], pace, res["reason"], get_kst_now().strftime('%Y-%m-%d %H:%M')))
+                            conn.commit()
+                            conn.close()
+                        except: pass
+            else:
+                st.warning("사진을 모두 업로드해주세요.")
 
 if is_admin:
     with tabs[1]:
