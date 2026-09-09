@@ -11,24 +11,25 @@ from fpdf import FPDF
 import requests
 import streamlit.components.v1 as components
 
-VERIFY_SERVER = "http://127.0.0.1:8000"  # 배포 후 실제 주소로 교체
+VERIFY_SERVER = "https://salaried-creme-crucial.ngrok-free.dev"  # 배포 후 실제 주소로 교체
 
 device_id = st.query_params.get("device_id", "unknown")
 
-def get_balance(device_id: str) -> int:
-    try:
-        res = requests.get(f"{VERIFY_SERVER}/credits/{device_id}", timeout=5)
-        return res.json()["balance"]
-    except Exception:
-        return 0  # 서버 통신 실패 시 안전하게 0으로 처리 (분석 막힘)
-        
 ADMIN_KEY = "bslee"  # 원하는 비밀 값으로 바꾸세요
 
 is_admin = st.query_params.get("admin") == ADMIN_KEY
 
+def get_balance(device_id: str) -> int:
+    try:
+        res = requests.get(f"{VERIFY_SERVER}/credits/{device_id}", timeout=5,headers={"ngrok-skip-browser-warning": "true"},)
+        return res.json()["balance"]
+    except Exception:
+        return 0  # 서버 통신 실패 시 안전하게 0으로 처리 (분석 막힘)
+    
+
 def consume_credit(device_id: str):
     try:
-        requests.post(f"{VERIFY_SERVER}/consume", json={"deviceId": device_id}, timeout=5)
+        requests.post(f"{VERIFY_SERVER}/consume", json={"deviceId": device_id}, timeout=5,headers={"ngrok-skip-browser-warning": "true"},)
     except Exception:
         pass
 
