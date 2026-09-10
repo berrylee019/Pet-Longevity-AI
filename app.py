@@ -355,8 +355,6 @@ with tabs[0]:
                         if not is_admin:
                             consume_credit(device_id)
                             
-                        # 분석 성공했으니 크레딧 1회 차감
-                        consume_credit(device_id)
         
                         # 로그 기록
                         try:
