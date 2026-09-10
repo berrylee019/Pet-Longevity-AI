@@ -36,7 +36,11 @@ def consume_credit(device_id: str):
 def show_paywall():
     st.warning("무료 분석을 모두 사용했어요. 분석 횟수를 충전하고 계속 이용하시겠어요?")
     components.html(
-        "<script>window.parent.postMessage({ type: 'SHOW_PAYWALL' }, '*');</script>",
+        """
+        <script>
+        window.top.postMessage({ type: 'SHOW_PAYWALL' }, '*');
+        </script>
+        """,
         height=0,
     )
     
