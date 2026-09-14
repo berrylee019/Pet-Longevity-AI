@@ -335,7 +335,8 @@ with tabs[0]:
             st.write(f"DEBUG: is_admin={is_admin}, query_params={dict(st.query_params)}")
             if not is_admin:
                 balance = get_balance(device_id)
-        
+                st.write(f"DEBUG balance={balance}")
+                
                 if balance <= 0:
                     show_paywall()
                     st.stop()
