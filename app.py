@@ -11,7 +11,7 @@ from fpdf import FPDF
 import requests
 import streamlit.components.v1 as components
 
-VERIFY_SERVER = "https://salaried-creme-crucial.ngrok-free.dev"  # 배포 후 실제 주소로 교체
+VERIFY_SERVER = "https://pet-longevity-verify.onrender.com"  # 배포 후 실제 주소로 교체
 
 device_id = st.query_params.get("device_id", "unknown")
 
