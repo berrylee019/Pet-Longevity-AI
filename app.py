@@ -26,7 +26,7 @@ def get_balance(device_id: str) -> int:
     except Exception:
         return 0  # 서버 통신 실패 시 안전하게 0으로 처리 (분석 막힘)
     
-
+st.write(f"DEBUG: is_admin={is_admin}, query_params={dict(st.query_params)}")
 def consume_credit(device_id: str):
     try:
         requests.post(f"{VERIFY_SERVER}/consume", json={"deviceId": device_id}, timeout=5,headers={"ngrok-skip-browser-warning": "true"},)
@@ -333,6 +333,7 @@ with tabs[0]:
     
     if st.button("🧠 분석 실행", use_container_width=True, type="primary", key="analyze_btn"):
         if side_f and top_f:
+            st.write(f"DEBUG: is_admin={is_admin}, query_params={dict(st.query_params)}")
             if not is_admin:
                 balance = get_balance(device_id)
         
