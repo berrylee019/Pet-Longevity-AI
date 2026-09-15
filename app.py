@@ -332,10 +332,8 @@ with tabs[0]:
     
     if st.button("🧠 분석 실행", use_container_width=True, type="primary", key="analyze_btn"):
         if side_f and top_f:
-            st.write(f"DEBUG: is_admin={is_admin}, query_params={dict(st.query_params)}")
             if not is_admin:
                 balance = get_balance(device_id)
-                st.write(f"DEBUG balance={balance}")
                 
                 if balance <= 0:
                     show_paywall()
