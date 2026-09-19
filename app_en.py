@@ -152,13 +152,11 @@ user_email = st.session_state.get("user_email")
 # --- 2. PDF Generation ---
 class PetPDF(FPDF):
     def header(self):
-        if os.path.exists("card_bg1_edited.png"):
-            self.image("card_bg1_edited.png", x=10, y=10, w=190)
-            self.ln(35)
-        else:
-            self.set_font('Helvetica', 'B', 20)
-            self.cell(0, 15, 'Pet Wellness Report', ln=True, align='C')
-            self.ln(5)
+        # 기존 card_bg1_edited.png는 한글 이미지라 글로벌판에서는 사용하지 않고,
+        # 대신 큰 글씨의 영문 타이틀만 상단에 표시합니다.
+        self.set_font('Helvetica', 'B', 22)
+        self.cell(0, 15, 'Anti-Aging & Body Condition Report', ln=True, align='C')
+        self.ln(5)
 
 
 def create_report(breed, bcs, pace, opinion):
