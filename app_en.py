@@ -36,6 +36,10 @@ from payments.lemonsqueezy_checkout import create_checkout_url
 PAYMENT_SERVER_URL = os.environ["PAYMENT_SERVER_URL"].rstrip("/")
 
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+# 이메일을 sha256 해시하면 항상 64자리 16진수 문자열이 됩니다.
+# 예전 버전에서 쓰던 랜덤 UUID(대시가 포함된 36자리)가 URL에 남아있는 경우를
+# 걸러내기 위한 검증용 정규식입니다.
+DEVICE_ID_RE = re.compile(r"^[0-9a-f]{64}$")
 
 # [CRITICAL] set_page_config MUST be the first Streamlit command
 st.set_page_config(page_title="Pet Longevity AI", layout="wide")
@@ -93,7 +97,7 @@ def get_or_create_uid():
     """세션에 식별된 사용자가 없으면 None을 반환 (이메일 게이트에서 처리)."""
     qp = st.query_params
     uid = qp.get("uid")
-    if uid:
+    if uid and DEVICE_ID_RE.match(uid):
         return uid
     return st.session_state.get("uid")
 
@@ -368,7 +372,11 @@ with t1:
                     }
 
                     deduct_credit(uid)
-                    st.rerun()
+                    # 참고: 이전에는 여기서 st.rerun()을 호출해 사이드바 크레딧 잔액을
+                    # 즉시 갱신했는데, 그러면 화면이 강제로 다시 그려지면서 방금 보여준
+                    # 결과가 잠깐 사라지는 문제가 있었습니다. last_result는 바로 아래
+                    # 블록에서 같은 실행 흐름 안에 표시되므로 rerun 없이도 결과는 정상
+                    # 노출되고, 사이드바 잔액만 다음 상호작용 때 갱신됩니다.
         else:
             st.warning("Please upload both images.")
 
